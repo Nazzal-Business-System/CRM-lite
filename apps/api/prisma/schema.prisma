@@ -1,0 +1,395 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CompanySize {
+  UNKNOWN
+  SOLO
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum CompanySource {
+  RESEARCH
+  REFERRAL
+  INBOUND
+  EVENT
+  EXISTING
+  OTHER
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum HypothesisStatus {
+  UNTESTED
+  PARTIALLY_VALIDATED
+  VALIDATED
+  REJECTED
+}
+
+enum EvidenceCategory {
+  GROWTH
+  OPERATIONS
+  TECHNOLOGY
+  LOCATIONS
+  HIRING
+  DISTRIBUTION
+  OTHER
+}
+
+enum DecisionRole {
+  DECISION_MAKER
+  INFLUENCER
+  CHAMPION
+  TECHNICAL
+  USER
+  GATEKEEPER
+  UNKNOWN
+}
+
+enum PreferredChannel {
+  EMAIL
+  PHONE
+  WHATSAPP
+  LINKEDIN
+  OTHER
+}
+
+enum OpportunityStage {
+  TARGET
+  CONTACTED
+  ENGAGED
+  QUALIFIED
+  DISCOVERY
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  LINKEDIN
+  WHATSAPP
+  MEETING
+  FOLLOW_UP
+  NOTE
+}
+
+enum TaskStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum RecruitmentRoleType {
+  COMMISSION
+  PART_TIME
+  FULL_TIME
+  FREELANCE
+  OTHER
+}
+
+enum RecruitmentStage {
+  SOURCED
+  TO_CONTACT
+  CONTACTED
+  INTERESTED
+  INTERVIEW
+  EVALUATING
+  OFFER
+  HIRED
+  REJECTED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id])
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ownedCompanies              Company[]            @relation("CompanyOwner")
+  createdEvidence             ResearchEvidence[]
+  createdHypotheses           Hypothesis[]
+  ownedOpportunities          Opportunity[]        @relation("OpportunityOwner")
+  commissionOpportunities     Opportunity[]        @relation("OpportunityCommission")
+  ownedActivities             Activity[]
+  ownedTasks                  Task[]
+  createdRecruitmentCandidates RecruitmentCandidate[]
+
+  @@index([roleId])
+  @@index([isActive])
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String
+  category    String
+  roles       RolePermission[]
+
+  @@index([category])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model Company {
+  id                   String        @id @default(cuid())
+  name                 String
+  nameNormalized       String
+  website              String?
+  websiteDomain        String?
+  sector               String?
+  companySize          CompanySize   @default(UNKNOWN)
+  locations            String?
+  source               CompanySource @default(RESEARCH)
+  companyFit           Int?
+  problemPotential     Int?
+  decisionMakerAccess  Int?
+  qualificationScore   Int?
+  priority             Priority?
+  ownerId              String?
+  owner                User?         @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  generalNotes         String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  contacts      Contact[]
+  evidence      ResearchEvidence[]
+  hypotheses    Hypothesis[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  tasks         Task[]
+
+  @@index([nameNormalized])
+  @@index([websiteDomain])
+  @@index([ownerId])
+  @@index([priority])
+  @@index([name])
+  @@map("companies")
+}
+
+model ResearchEvidence {
+  id          String            @id @default(cuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title       String
+  details     String
+  category    EvidenceCategory?
+  sourceUrl   String?
+  sourceName  String?
+  observedAt  DateTime?
+  createdById String
+  createdBy   User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([companyId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("research_evidence")
+}
+
+model Hypothesis {
+  id                String           @id @default(cuid())
+  companyId         String
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  statement         String
+  status            HypothesisStatus @default(UNTESTED)
+  supportingContext String?
+  createdById       String
+  createdBy         User             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([createdById])
+  @@map("hypotheses")
+}
+
+model Contact {
+  id               String           @id @default(cuid())
+  companyId        String
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name             String
+  jobTitle         String?
+  decisionRole     DecisionRole     @default(UNKNOWN)
+  email            String?
+  phone            String?
+  linkedInUrl      String?
+  preferredChannel PreferredChannel @default(EMAIL)
+  notes            String?
+  isPrimary        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  opportunities Opportunity[] @relation("OpportunityPrimaryContact")
+  activities    Activity[]
+  tasks         Task[]
+
+  @@index([companyId])
+  @@index([email])
+  @@index([name])
+  @@map("contacts")
+}
+
+model Opportunity {
+  id                         String           @id @default(cuid())
+  companyId                  String
+  company                    Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  name                       String
+  stage                      OpportunityStage @default(TARGET)
+  primaryContactId           String?
+  primaryContact             Contact?         @relation("OpportunityPrimaryContact", fields: [primaryContactId], references: [id], onDelete: SetNull)
+  summary                    String?
+  confirmedProblem           String?
+  businessImpact             String?
+  proposedSolution           String?
+  estimatedValue             Decimal?         @db.Decimal(14, 2)
+  probability                Int              @default(5)
+  source                     String?
+  ownerId                    String?
+  owner                      User?            @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  commissionRepresentativeId String?
+  commissionRepresentative   User?            @relation("OpportunityCommission", fields: [commissionRepresentativeId], references: [id], onDelete: SetNull)
+  expectedCloseDate          DateTime?
+  outcomeNotes               String?
+  lostReason                 String?
+  closedAt                   DateTime?
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+
+  activities Activity[]
+  tasks      Task[]
+
+  @@index([companyId])
+  @@index([stage])
+  @@index([ownerId])
+  @@index([primaryContactId])
+  @@index([expectedCloseDate])
+  @@map("opportunities")
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  companyId     String
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contactId     String?
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  type          ActivityType
+  occurredAt    DateTime
+  summary       String
+  outcome       String?
+  ownerId       String
+  owner         User         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([companyId, occurredAt])
+  @@index([opportunityId])
+  @@index([contactId])
+  @@index([ownerId])
+  @@index([occurredAt])
+  @@map("activities")
+}
+
+model Task {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  dueAt         DateTime
+  status        TaskStatus   @default(OPEN)
+  ownerId       String
+  owner         User         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  companyId     String?
+  company       Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId     String?
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  completedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([dueAt, status])
+  @@index([ownerId, status])
+  @@index([companyId])
+  @@index([opportunityId])
+  @@index([contactId])
+  @@map("tasks")
+}
+
+model RecruitmentCandidate {
+  id                 String               @id @default(cuid())
+  fullName           String
+  email              String?
+  phone              String?
+  linkedInUrl        String?
+  location           String?
+  source             String
+  roleType           RecruitmentRoleType  @default(COMMISSION)
+  stage              RecruitmentStage     @default(SOURCED)
+  experienceSummary  String?
+  notes              String?
+  nextAction         String?
+  nextActionDate     DateTime?
+  compensationNotes  String?
+  rejectionReason    String?
+  createdById        String
+  createdBy          User                 @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([stage])
+  @@index([roleType])
+  @@index([source])
+  @@index([nextActionDate])
+  @@index([createdById])
+  @@index([fullName])
+  @@map("recruitment_candidates")
+}
