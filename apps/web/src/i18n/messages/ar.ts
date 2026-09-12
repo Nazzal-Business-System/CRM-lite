@@ -281,6 +281,10 @@ export const arMessages = {
     channel: "القناة",
     save: "حفظ جهة الاتصال",
     saveFailed: "تعذّر حفظ جهة الاتصال.",
+    openEditFailed: "تعذّر فتح جهة الاتصال للتعديل.",
+    deleteTitle: "حذف {name}؟",
+    deleteBody: "سيؤدي هذا إلى حذف جهة الاتصال نهائياً ولا يمكن التراجع عنه.",
+    deleteFailed: "تعذّر حذف جهة الاتصال.",
   },
   opportunities: {
     title: "الفرص",
@@ -705,6 +709,7 @@ export const arMessages = {
     companyDeleted: "تم حذف الشركة",
     contactCreated: "تم إنشاء جهة الاتصال",
     contactUpdated: "تم تحديث جهة الاتصال",
+    contactDeleted: "تم حذف جهة الاتصال",
     opportunityCreated: "تم إنشاء الفرصة",
     opportunityUpdated: "تم تحديث الفرصة",
     activityLogged: "تم تسجيل النشاط",

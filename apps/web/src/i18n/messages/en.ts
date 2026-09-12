@@ -281,6 +281,10 @@ export const enMessages = {
     channel: "Channel",
     save: "Save contact",
     saveFailed: "Unable to save contact.",
+    openEditFailed: "Unable to open contact for edit.",
+    deleteTitle: "Delete {name}?",
+    deleteBody: "This permanently deletes the contact and cannot be undone.",
+    deleteFailed: "Unable to delete contact.",
   },
   opportunities: {
     title: "Opportunities",
@@ -705,6 +709,7 @@ export const enMessages = {
     companyDeleted: "Company deleted",
     contactCreated: "Contact created",
     contactUpdated: "Contact updated",
+    contactDeleted: "Contact deleted",
     opportunityCreated: "Opportunity created",
     opportunityUpdated: "Opportunity updated",
     activityLogged: "Activity logged",

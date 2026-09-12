@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
+import { cacheContact, refreshContactCollections } from "@/lib/contact-cache";
 
 export function ContactFormDialog({
   open,
@@ -57,11 +58,14 @@ export function ContactFormDialog({
       }
       return api.post<{ contact: ContactDetail }>("/contacts", input);
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       toast.success(contact ? t("toasts.contactUpdated") : t("toasts.contactCreated"));
+      cacheContact(queryClient, data.contact);
+      await refreshContactCollections(queryClient, [
+        contact?.companyId,
+        data.contact.companyId,
+      ]);
       onOpenChange(false);
-      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      await queryClient.invalidateQueries({ queryKey: ["company"] });
     },
     onError: (error) => {
       toast.error(error instanceof ApiError ? error.message : t("contacts.saveFailed"));
@@ -89,12 +93,12 @@ export function ContactFormDialog({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-1.5rem)] max-w-2xl gap-3 overflow-y-auto p-4 sm:p-5 [@media(min-width:640px)_and_(min-height:600px)]:overflow-y-visible">
         <DialogHeader>
           <DialogTitle>{contact ? t("contacts.edit") : t("contacts.add")}</DialogTitle>
         </DialogHeader>
         <form
-          className="grid gap-4 sm:grid-cols-2"
+          className="grid gap-x-4 gap-y-2 sm:grid-cols-2 [&_.space-y-2]:space-y-1"
           onSubmit={(event) => {
             event.preventDefault();
             mutation.mutate({
@@ -182,6 +186,7 @@ export function ContactFormDialog({
             <FormField label={t("contacts.notes")} htmlFor="contact-notes">
               <Textarea
                 id="contact-notes"
+                className="min-h-16 resize-y"
                 value={form.notes}
                 onChange={(event) => setForm({ ...form, notes: event.target.value })}
               />
