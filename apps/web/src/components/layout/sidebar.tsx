@@ -143,7 +143,7 @@ export function DesktopSidebar() {
       <div
         className={cn(
           "flex shrink-0 items-center gap-1 px-2",
-          collapsed ? "h-auto flex-col py-3" : "h-14 justify-between",
+          collapsed ? "h-auto flex-col py-3" : "h-28 justify-between",
         )}
       >
         <AppLink

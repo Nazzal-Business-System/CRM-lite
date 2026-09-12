@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { BrandLockup, LoginBrand } from "@/components/brand";
+import { NbsLogo } from "@/components/brand";
 import { LoginForm } from "@/components/login-form";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -13,69 +13,40 @@ import { useAuth } from "@/providers/auth-provider";
 export function LoginScreen() {
   const { t } = useI18n();
 
-  const signals = [
-    {
-      label: t("auth.signalIntelligence"),
-      detail: t("auth.signalIntelligenceHint"),
-    },
-    {
-      label: t("auth.signalResearch"),
-      detail: t("auth.signalResearchHint"),
-    },
-    {
-      label: t("auth.signalOpportunities"),
-      detail: t("auth.signalOpportunitiesHint"),
-    },
-    {
-      label: t("auth.signalFollowUps"),
-      detail: t("auth.signalFollowUpsHint"),
-    },
-  ] as const;
-
   return (
-    <main className="relative min-h-svh bg-background">
-      <div className="relative mx-auto flex min-h-svh w-full max-w-[1080px] flex-col px-4 py-4 sm:px-6 lg:px-8">
-        <header className="flex items-center justify-between py-1">
-          <LoginBrand />
-          <div className="flex items-center gap-1.5">
-            <LanguageSwitcher />
-            <ThemeToggle />
+    <main className="min-h-svh bg-background">
+      <div className="mx-auto flex min-h-svh w-full items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
+        <div className="w-full max-w-[1120px] md:-translate-y-2">
+          <div className="mb-3 flex justify-end">
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-sm">
+              <LanguageSwitcher />
+              <ThemeToggle />
+            </div>
           </div>
-        </header>
 
-        <div className="flex flex-1 items-center py-8 sm:py-10">
-          <div className="grid w-full overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_50px_oklch(0.2_0.03_255_/_0.08)] lg:grid-cols-[1.05fr_0.95fr]">
-            <section className="hidden flex-col justify-between bg-[#05070c] px-10 py-10 text-white lg:flex lg:min-h-[540px] lg:px-12 lg:py-12">
-              <BrandLockup className="h-20 max-w-[320px]" />
-              <div>
-                <p className="text-sm text-white/60">{t("auth.panelEyebrow")}</p>
-                <p className="mt-4 max-w-sm text-[17px] leading-7 text-white/72">
-                  {t("auth.panelTitle")}
-                </p>
-              </div>
-              <ul className="grid grid-cols-2 gap-3">
-                {signals.map((item) => (
-                  <li key={item.label} className="rounded-xl bg-white/5 px-4 py-3 ring-1 ring-white/10">
-                    <p className="text-sm font-medium text-white">{item.label}</p>
-                    <p className="mt-1 text-sm leading-5 text-white/60">{item.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 lg:px-12">
-              <div className="mb-8 lg:hidden">
-                <BrandLockup compact />
-                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+          <div className="grid w-full overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_50px_oklch(0.12_0.02_255_/_0.1)] md:min-h-[520px] md:grid-cols-[0.92fr_1.08fr] dark:shadow-[0_20px_55px_oklch(0.06_0.02_255_/_0.32)]">
+            <section className="flex items-start px-7 pt-7 pb-3 sm:px-10 sm:pt-9 md:px-12 md:py-14 lg:px-16">
+              <div className="max-w-[360px]">
+                <NbsLogo className="size-32 rounded-none bg-transparent sm:size-36 md:size-44" />
+                <h2 className="mt-5 text-xl font-semibold tracking-[-0.025em] text-foreground sm:text-[1.4rem]">
+                  {t("auth.productTitle")}
+                </h2>
+                <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
                   {t("auth.panelTagline")}
                 </p>
+                <p className="mt-1 hidden text-sm leading-6 text-muted-foreground md:block">
+                  {t("auth.accessNote")}
+                </p>
               </div>
-              <div className="mx-auto w-full max-w-[400px] lg:mx-0 lg:max-w-none">
-                <div className="mb-8 space-y-2">
-                  <h1 className="text-[1.65rem] font-semibold tracking-[-0.03em]">
+            </section>
+
+            <section className="flex items-start px-7 pt-6 pb-9 sm:px-10 sm:pb-11 md:px-12 md:py-14 lg:px-16">
+              <div className="w-full max-w-[420px]">
+                <div className="mb-8">
+                  <h1 className="text-[1.85rem] font-semibold tracking-[-0.035em] text-foreground">
                     {t("auth.loginTitle")}
                   </h1>
-                  <p className="text-sm leading-6 text-muted-foreground">
+                  <p className="mt-2.5 text-sm leading-6 text-muted-foreground">
                     {t("auth.loginSubtitle")}
                   </p>
                 </div>
@@ -84,10 +55,6 @@ export function LoginScreen() {
             </section>
           </div>
         </div>
-
-        <footer className="pb-[max(0.25rem,env(safe-area-inset-bottom))] text-sm text-muted-foreground">
-          {t("auth.footer")}
-        </footer>
       </div>
     </main>
   );

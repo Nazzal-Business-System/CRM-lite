@@ -73,7 +73,7 @@ export function TopBar() {
         >
           <SheetHeader className="border-b border-sidebar-border">
             <SheetTitle>
-              <BrandLockup compact />
+              <BrandLockup compact className="size-24" />
             </SheetTitle>
           </SheetHeader>
           <SidebarNav collapsed={false} onNavigate={() => setOpen(false)} />

@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useI18n } from "@/i18n/provider";
 import { cn } from "@/lib/utils";
 
+const OFFICIAL_NBS_LOGO = "/brand/NBS-logo.png";
+
 /** Keep brand assets LTR so logos are never mirrored in RTL layouts. */
 function BrandFrame({
   children,
@@ -19,24 +21,29 @@ function BrandFrame({
   );
 }
 
-export function BrandMark({
+export function NbsLogo({
   className,
   alt,
+  priority = true,
 }: {
   className?: string;
   alt?: string;
+  priority?: boolean;
 }) {
   const { t } = useI18n();
 
   return (
     <BrandFrame>
       <Image
-        src="/brand/nbs-mark.png"
-        alt={alt ?? t("brand.markAlt")}
-        width={320}
-        height={128}
-        className={cn("h-8 w-auto object-contain object-left", className)}
-        priority
+        src={OFFICIAL_NBS_LOGO}
+        alt={alt ?? t("brand.lockupAlt")}
+        width={1254}
+        height={1254}
+        className={cn(
+          "block size-48 shrink-0 rounded-lg bg-[#05070c] object-contain",
+          className,
+        )}
+        priority={priority}
       />
     </BrandFrame>
   );
@@ -49,41 +56,7 @@ export function BrandLockup({
   compact?: boolean;
   className?: string;
 }) {
-  const { t } = useI18n();
-
-  return (
-    <BrandFrame className={className}>
-      <Image
-        src={compact ? "/brand/nbs-lockup-compact.png" : "/brand/nbs-lockup.png"}
-        alt={t("brand.lockupAlt")}
-        width={compact ? 640 : 1280}
-        height={compact ? 240 : 480}
-        className={cn(
-          "hidden object-contain object-left mix-blend-screen dark:block",
-          compact ? "h-9 w-auto max-w-[168px]" : "h-16 w-auto max-w-[280px]",
-        )}
-        priority
-      />
-      <span className="flex items-center gap-2.5 dark:hidden">
-        <Image
-          src="/brand/nbs-mark.png"
-          alt={t("brand.markAlt")}
-          width={320}
-          height={128}
-          className={cn(
-            "w-auto object-contain object-left",
-            compact ? "h-7" : "h-10",
-          )}
-          priority
-        />
-        <span className="min-w-0">
-          <span className="block text-[11px] font-medium tracking-[0.16em] text-muted-foreground">
-            {t("brand.crm")}
-          </span>
-        </span>
-      </span>
-    </BrandFrame>
-  );
+  return <NbsLogo className={cn(compact ? "size-24" : "size-48", className)} />;
 }
 
 export function SidebarBrand({ collapsed }: { collapsed: boolean }) {
@@ -91,37 +64,13 @@ export function SidebarBrand({ collapsed }: { collapsed: boolean }) {
 
   if (collapsed) {
     return (
-      <BrandFrame>
-        <Image
-          src="/brand/nbs-mark.png"
-          alt={t("brand.sidebarAlt")}
-          width={160}
-          height={64}
-          className="h-8 w-auto max-w-[52px] object-contain dark:hidden"
-          priority
-        />
-        <Image
-          src="/brand/nbs-mark-white.png"
-          alt={t("brand.sidebarAlt")}
-          width={160}
-          height={64}
-          className="hidden h-8 w-auto max-w-[52px] object-contain mix-blend-screen dark:block"
-          priority
-        />
+      <BrandFrame className="size-10 justify-center rounded-lg bg-[#05070c] text-[13px] font-semibold tracking-[-0.04em] text-white ring-1 ring-white/10">
+        <span role="img" aria-label={t("brand.sidebarAlt")}>
+          NB<span className="text-[#7584ff]">S</span>
+        </span>
       </BrandFrame>
     );
   }
 
-  return <BrandLockup compact />;
-}
-
-export function LoginBrand() {
-  const { t } = useI18n();
-
-  return (
-    <BrandFrame className="gap-3">
-      <BrandMark className="h-8" />
-      <span className="text-sm text-muted-foreground">{t("brand.company")}</span>
-    </BrandFrame>
-  );
+  return <NbsLogo className="size-24" alt={t("brand.sidebarAlt")} />;
 }

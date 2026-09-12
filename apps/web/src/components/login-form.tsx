@@ -62,9 +62,9 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-1" noValidate>
-      <div className="space-y-2">
-        <Label htmlFor="email" className="text-sm font-medium text-foreground">
+    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+      <div className="space-y-2.5">
+        <Label htmlFor="email" className="text-[13px] font-medium text-foreground">
           {t("auth.email")}
           <span className="ms-0.5 text-destructive" aria-hidden="true">
             *
@@ -80,16 +80,18 @@ export function LoginForm() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           aria-invalid={Boolean(fieldErrors.email)}
-          aria-describedby="email-error"
+          aria-describedby={fieldErrors.email ? "email-error" : undefined}
           disabled={submitting}
-          className="h-11 rounded-lg border-border bg-background px-3 text-sm shadow-none"
+          className="h-12 rounded-lg border-input bg-background/55 px-3.5 text-sm shadow-sm transition-[border-color,box-shadow,background-color] focus-visible:border-primary/60 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0"
         />
-        <p id="email-error" className="min-h-5 text-sm text-destructive">
-          {fieldErrors.email}
-        </p>
+        {fieldErrors.email ? (
+          <p id="email-error" className="text-[13px] leading-5 text-destructive">
+            {fieldErrors.email}
+          </p>
+        ) : null}
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="password" className="text-sm font-medium text-foreground">
+      <div className="space-y-2.5">
+        <Label htmlFor="password" className="text-[13px] font-medium text-foreground">
           {t("auth.password")}
           <span className="ms-0.5 text-destructive" aria-hidden="true">
             *
@@ -105,30 +107,39 @@ export function LoginForm() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             aria-invalid={Boolean(fieldErrors.password)}
-            aria-describedby="password-error"
+            aria-describedby={fieldErrors.password ? "password-error" : undefined}
             disabled={submitting}
-            className="h-11 rounded-lg border-border bg-background px-3 pe-12 text-sm shadow-none"
+            className="h-12 rounded-lg border-input bg-background/55 px-3.5 pe-12 text-sm shadow-sm transition-[border-color,box-shadow,background-color] focus-visible:border-primary/60 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0"
           />
           <button
             type="button"
-            className="absolute top-1/2 end-1.5 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground"
+            className="absolute top-1/2 end-1.5 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-[color,background-color,transform] duration-200 hover:bg-muted hover:text-foreground active:scale-95 disabled:pointer-events-none disabled:opacity-50"
             onClick={() => setShowPassword((value) => !value)}
+            disabled={submitting}
+            aria-pressed={showPassword}
             aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
           >
             {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
         </div>
-        <p id="password-error" className="min-h-5 text-sm text-destructive">
-          {fieldErrors.password}
-        </p>
+        {fieldErrors.password ? (
+          <p id="password-error" className="text-[13px] leading-5 text-destructive">
+            {fieldErrors.password}
+          </p>
+        ) : null}
       </div>
-      <p className="min-h-5 text-sm text-destructive" role="alert">
-        {error}
-      </p>
+      {error ? (
+        <p
+          className="rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-2.5 text-[13px] leading-5 text-destructive"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
       <Button
         type="submit"
         loading={submitting}
-        className="mt-2 h-11 w-full"
+        className="h-12 w-full rounded-lg shadow-sm transition-[color,background-color,box-shadow,transform,opacity] hover:shadow-md active:translate-y-px"
       >
         {submitting ? t("auth.signingIn") : t("auth.signIn")}
       </Button>
