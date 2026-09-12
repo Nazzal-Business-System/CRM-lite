@@ -25,6 +25,53 @@ import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
 import { cacheContact, refreshContactCollections } from "@/lib/contact-cache";
 
+type ContactFormState = {
+  companyId: string;
+  name: string;
+  jobTitle: string;
+  decisionRole: (typeof DECISION_ROLES)[number];
+  email: string;
+  phone: string;
+  linkedInUrl: string;
+  preferredChannel: (typeof PREFERRED_CHANNELS)[number];
+  notes: string;
+  isPrimary: boolean;
+};
+
+const EMPTY_CONTACT_FORM: ContactFormState = {
+  companyId: "",
+  name: "",
+  jobTitle: "",
+  decisionRole: "UNKNOWN",
+  email: "",
+  phone: "",
+  linkedInUrl: "",
+  preferredChannel: "EMAIL",
+  notes: "",
+  isPrimary: false,
+};
+
+function contactFormValues(
+  contact?: ContactDetail | null,
+  companyId?: string,
+): ContactFormState {
+  if (!contact) {
+    return { ...EMPTY_CONTACT_FORM, companyId: companyId ?? "" };
+  }
+  return {
+    companyId: contact.companyId,
+    name: contact.name,
+    jobTitle: contact.jobTitle ?? "",
+    decisionRole: contact.decisionRole,
+    email: contact.email ?? "",
+    phone: contact.phone ?? "",
+    linkedInUrl: contact.linkedInUrl ?? "",
+    preferredChannel: contact.preferredChannel,
+    notes: contact.notes ?? "",
+    isPrimary: contact.isPrimary,
+  };
+}
+
 export function ContactFormDialog({
   open,
   onOpenChange,
@@ -36,20 +83,33 @@ export function ContactFormDialog({
   companyId?: string;
   contact?: ContactDetail | null;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <ContactFormContent
+          companyId={companyId}
+          contact={contact}
+          onClose={() => onOpenChange(false)}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function ContactFormContent({
+  companyId,
+  contact,
+  onClose,
+}: {
+  companyId?: string;
+  contact?: ContactDetail | null;
+  onClose: () => void;
+}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    companyId: contact?.companyId ?? companyId ?? "",
-    name: contact?.name ?? "",
-    jobTitle: contact?.jobTitle ?? "",
-    decisionRole: contact?.decisionRole ?? "UNKNOWN",
-    email: contact?.email ?? "",
-    phone: contact?.phone ?? "",
-    linkedInUrl: contact?.linkedInUrl ?? "",
-    preferredChannel: contact?.preferredChannel ?? "EMAIL",
-    notes: contact?.notes ?? "",
-    isPrimary: contact?.isPrimary ?? false,
-  });
+  const [form, setForm] = useState<ContactFormState>(() =>
+    contactFormValues(contact, companyId),
+  );
 
   const mutation = useMutation({
     mutationFn: (input: CreateContactInput) => {
@@ -65,7 +125,7 @@ export function ContactFormDialog({
         contact?.companyId,
         data.contact.companyId,
       ]);
-      onOpenChange(false);
+      onClose();
     },
     onError: (error) => {
       toast.error(error instanceof ApiError ? error.message : t("contacts.saveFailed"));
@@ -73,27 +133,7 @@ export function ContactFormDialog({
   });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (next) {
-          setForm({
-            companyId: contact?.companyId ?? companyId ?? "",
-            name: contact?.name ?? "",
-            jobTitle: contact?.jobTitle ?? "",
-            decisionRole: contact?.decisionRole ?? "UNKNOWN",
-            email: contact?.email ?? "",
-            phone: contact?.phone ?? "",
-            linkedInUrl: contact?.linkedInUrl ?? "",
-            preferredChannel: contact?.preferredChannel ?? "EMAIL",
-            notes: contact?.notes ?? "",
-            isPrimary: contact?.isPrimary ?? false,
-          });
-        }
-      }}
-    >
-      <DialogContent className="max-h-[calc(100dvh-1.5rem)] max-w-2xl gap-3 overflow-y-auto p-4 sm:p-5 [@media(min-width:640px)_and_(min-height:600px)]:overflow-y-visible">
+    <DialogContent className="max-h-[calc(100dvh-1.5rem)] max-w-2xl gap-3 overflow-y-auto p-4 sm:p-5 [@media(min-width:640px)_and_(min-height:600px)]:overflow-y-visible">
         <DialogHeader>
           <DialogTitle>{contact ? t("contacts.edit") : t("contacts.add")}</DialogTitle>
         </DialogHeader>
@@ -200,7 +240,7 @@ export function ContactFormDialog({
             {t("contacts.primaryContact")}
           </label>
           <DialogFooter className="sm:col-span-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={onClose}>
               {t("common.cancel")}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
@@ -209,6 +249,5 @@ export function ContactFormDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
   );
 }
