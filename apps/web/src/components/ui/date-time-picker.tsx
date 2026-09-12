@@ -9,6 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/provider";
+import { jordanDateTimeToUtc, jordanParts } from "@/lib/format";
 
 function pad(value: number): string {
   return String(value).padStart(2, "0");
@@ -23,7 +24,10 @@ function parseIsoDate(value: string | null | undefined): Date | undefined {
     return new Date(year!, month! - 1, day);
   }
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  const parts = jordanParts(date);
+  return parts
+    ? new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+    : undefined;
 }
 
 function toDateValue(date: Date): string {
@@ -31,7 +35,14 @@ function toDateValue(date: Date): string {
 }
 
 function toDateTimeValue(date: Date): string {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString();
+  return jordanDateTimeToUtc({
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+    second: 0,
+  });
 }
 
 export function DateTimePicker({
@@ -101,7 +112,16 @@ export function DateTimePicker({
   const period = hour >= 12 ? "PM" : "AM";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next && selected) {
+          setHour(selected.getHours());
+          setMinute(selected.getMinutes());
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -197,7 +217,14 @@ export function DateTimePicker({
               size="sm"
               variant="ghost"
               onClick={() => {
-                const now = new Date();
+                const nowParts = jordanParts(new Date())!;
+                const now = new Date(
+                  nowParts.year,
+                  nowParts.month - 1,
+                  nowParts.day,
+                  nowParts.hour,
+                  nowParts.minute,
+                );
                 if (includeTime) {
                   setHour(now.getHours());
                   setMinute(now.getMinutes());

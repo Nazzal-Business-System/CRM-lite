@@ -101,6 +101,14 @@ const PRIORITY_RANK: Record<string, number> = {
   MEDIUM: 2,
   LOW: 1,
 };
+const SIZE_RANK: Record<CompanySummary["companySize"], number> = {
+  UNKNOWN: 0,
+  SOLO: 1,
+  SMALL: 2,
+  MEDIUM: 3,
+  LARGE: 4,
+  ENTERPRISE: 5,
+};
 
 /** Heal stale persisted priority/score so filters and display share one source of truth. */
 async function syncStoredQualification(rows: CompanyListRow[]): Promise<void> {
@@ -152,39 +160,36 @@ function buildCompanySearchWhere(query: CompanyListQuery): Prisma.CompanyWhereIn
 }
 
 function compareCompanies(
-  a: CompanyListRow,
-  b: CompanyListRow,
+  a: CompanySummary,
+  b: CompanySummary,
   query: CompanyListQuery,
 ): number {
-  const aq = computeQualification(
-    a.companyFit,
-    a.problemPotential,
-    a.decisionMakerAccess,
-  );
-  const bq = computeQualification(
-    b.companyFit,
-    b.problemPotential,
-    b.decisionMakerAccess,
-  );
   const direction = query.order === "asc" ? 1 : -1;
+  let result = 0;
 
   if (query.sort === "name") {
-    return a.name.localeCompare(b.name) * direction;
+    result = a.name.localeCompare(b.name);
+  } else if (query.sort === "priority") {
+    if (a.priority == null || b.priority == null) {
+      if (a.priority !== b.priority) return a.priority == null ? 1 : -1;
+    } else result = (PRIORITY_RANK[a.priority] ?? 0) - (PRIORITY_RANK[b.priority] ?? 0);
+  } else if (query.sort === "qualificationScore") {
+    if (a.qualificationScore == null || b.qualificationScore == null) {
+      if (a.qualificationScore !== b.qualificationScore) return a.qualificationScore == null ? 1 : -1;
+    } else result = a.qualificationScore - b.qualificationScore;
+  } else if (query.sort === "companySize") {
+    if (a.companySize === "UNKNOWN" || b.companySize === "UNKNOWN") {
+      if (a.companySize !== b.companySize) return a.companySize === "UNKNOWN" ? 1 : -1;
+    } else result = SIZE_RANK[a.companySize] - SIZE_RANK[b.companySize];
+  } else if (query.sort === "nextFollowUpAt") {
+    if (a.nextFollowUpAt == null || b.nextFollowUpAt == null) {
+      if (a.nextFollowUpAt !== b.nextFollowUpAt) return a.nextFollowUpAt == null ? 1 : -1;
+    } else result = Date.parse(a.nextFollowUpAt) - Date.parse(b.nextFollowUpAt);
+  } else {
+    result = Date.parse(query.sort === "createdAt" ? a.createdAt : a.updatedAt) -
+      Date.parse(query.sort === "createdAt" ? b.createdAt : b.updatedAt);
   }
-  if (query.sort === "priority") {
-    const av = aq.priority ? PRIORITY_RANK[aq.priority] ?? 0 : 0;
-    const bv = bq.priority ? PRIORITY_RANK[bq.priority] ?? 0 : 0;
-    return (av - bv) * direction;
-  }
-  if (query.sort === "qualificationScore") {
-    const av = aq.qualificationScore ?? -1;
-    const bv = bq.qualificationScore ?? -1;
-    return (av - bv) * direction;
-  }
-  if (query.sort === "createdAt") {
-    return (a.createdAt.getTime() - b.createdAt.getTime()) * direction;
-  }
-  return (a.updatedAt.getTime() - b.updatedAt.getTime()) * direction;
+  return result === 0 ? a.name.localeCompare(b.name) : result * direction;
 }
 
 async function attachListMetrics(
@@ -296,14 +301,15 @@ export async function listCompanies(
       )
     : rows;
 
-  filtered.sort((a, b) => compareCompanies(a, b, query));
+  const companies = await attachListMetrics(filtered);
+  companies.sort((a, b) => compareCompanies(a, b, query));
 
-  const total = filtered.length;
+  const total = companies.length;
   const { skip, take } = skipTake(query.page, query.pageSize);
-  const pageRows = filtered.slice(skip, skip + take);
+  const pageRows = companies.slice(skip, skip + take);
 
   return {
-    items: await attachListMetrics(pageRows),
+    items: pageRows,
     total,
     page: query.page,
     pageSize: query.pageSize,

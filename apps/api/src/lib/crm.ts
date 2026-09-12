@@ -33,15 +33,52 @@ export function parseDate(value: string | null | undefined): Date | null | undef
 }
 
 export function startOfDay(date = new Date()): Date {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
+  const parts = jordanDateParts(date);
+  return jordanWallTime(parts.year, parts.month, parts.day);
 }
 
 export function endOfDay(date = new Date()): Date {
-  const copy = new Date(date);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
+  const parts = jordanDateParts(date);
+  const nextDay = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1));
+  return new Date(
+    jordanWallTime(
+      nextDay.getUTCFullYear(),
+      nextDay.getUTCMonth() + 1,
+      nextDay.getUTCDate(),
+    ).getTime() - 1,
+  );
+}
+
+function jordanDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Amman",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: value("year"), month: value("month"), day: value("day"),
+    hour: value("hour"), minute: value("minute"), second: value("second"),
+  };
+}
+
+function jordanWallTime(year: number, month: number, day: number): Date {
+  const target = Date.UTC(year, month - 1, day);
+  let instant = target;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const rendered = jordanDateParts(new Date(instant));
+    instant = target - (Date.UTC(
+      rendered.year, rendered.month - 1, rendered.day,
+      rendered.hour, rendered.minute, rendered.second,
+    ) - instant);
+  }
+  return new Date(instant);
 }
 
 export function isoOrNull(value: Date | null | undefined): string | null {

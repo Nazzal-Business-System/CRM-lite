@@ -118,11 +118,18 @@ export async function listContacts(
   };
 
   const { skip, take } = skipTake(query.page, query.pageSize);
+  const orderBy: Prisma.ContactOrderByWithRelationInput[] = [
+    query.sort === "companyName"
+      ? { company: { name: query.order } }
+      : { [query.sort]: query.order },
+    { name: "asc" },
+    { id: "asc" },
+  ];
   const [rows, total] = await Promise.all([
     prisma.contact.findMany({
       where,
       include: { company: { select: { name: true } } },
-      orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
+      orderBy,
       skip,
       take,
     }),

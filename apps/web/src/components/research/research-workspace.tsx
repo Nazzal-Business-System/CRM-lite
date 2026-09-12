@@ -15,27 +15,31 @@ import {
   PageHeader,
   QueryPanel,
   Surface,
+  ToolbarFilter,
   ToolbarSearch,
 } from "@/components/crm/primitives";
+import { EnumSelect } from "@/components/crm/selects";
 import { useI18n } from "@/i18n/provider";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { navigateTo } from "@/lib/navigate";
 import { toQuery, useDebouncedValue } from "@/lib/query";
+import { sortParams, type SortSelection } from "@/lib/sorting";
 
 export function ResearchWorkspace() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortSelection>("createdAt:desc");
   const debounced = useDebouncedValue(search);
   const query = useQuery({
-    queryKey: ["research", debounced],
+    queryKey: ["research", debounced, sort],
     queryFn: () =>
       api.get<{
         evidence: PaginatedResult<ResearchEvidenceRecord>;
         hypotheses: PaginatedResult<HypothesisRecord>;
-      }>(`/research${toQuery({ search: debounced, pageSize: 12 })}`),
+      }>(`/research${toQuery({ search: debounced, ...sortParams(sort), pageSize: 12 })}`),
   });
 
   return (
@@ -50,6 +54,20 @@ export function ResearchWorkspace() {
           onChange={setSearch}
           placeholder={t("research.search")}
         />
+        <ToolbarFilter className="sm:min-w-60" label={t("filters.sort")}>
+          <EnumSelect
+            value={sort}
+            onChange={(value) => setSort(value as SortSelection)}
+            options={[
+              { value: "createdAt:desc", label: t("sort.recentlyAdded") },
+              { value: "createdAt:asc", label: t("sort.oldestAdded") },
+              { value: "updatedAt:desc", label: t("sort.recentlyUpdated") },
+              { value: "updatedAt:asc", label: t("sort.oldestUpdated") },
+              { value: "companyName:asc", label: t("sort.companyAsc") },
+              { value: "companyName:desc", label: t("sort.companyDesc") },
+            ]}
+          />
+        </ToolbarFilter>
       </DataToolbar>
       <QueryPanel
         query={query}

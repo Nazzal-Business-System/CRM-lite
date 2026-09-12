@@ -17,8 +17,10 @@ import {
   PageHeader,
   PaginationBar,
   QueryPanel,
+  ToolbarFilter,
   ToolbarSearch,
 } from "@/components/crm/primitives";
+import { EnumSelect } from "@/components/crm/selects";
 import { Can } from "@/components/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,18 +28,20 @@ import { useI18n } from "@/i18n/provider";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { toQuery, useDebouncedValue } from "@/lib/query";
+import { sortParams, type SortSelection } from "@/lib/sorting";
 
 export function ActivitiesWorkspace() {
   const { t, locale } = useI18n();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortSelection>("occurredAt:desc");
   const [open, setOpen] = useState(false);
   const debounced = useDebouncedValue(search);
   const query = useQuery({
-    queryKey: ["activities", debounced, page],
+    queryKey: ["activities", debounced, sort, page],
     queryFn: () =>
       api.get<PaginatedResult<ActivityRecord>>(
-        `/activities${toQuery({ search: debounced, page, pageSize: 20 })}`,
+        `/activities${toQuery({ search: debounced, ...sortParams(sort), page, pageSize: 20 })}`,
       ),
   });
 
@@ -65,6 +69,20 @@ export function ActivitiesWorkspace() {
           }}
           placeholder={t("activities.search")}
         />
+        <ToolbarFilter className="sm:min-w-60" label={t("filters.sort")}>
+          <EnumSelect
+            value={sort}
+            onChange={(value) => { setSort(value as SortSelection); setPage(1); }}
+            options={[
+              { value: "occurredAt:desc", label: t("sort.activityDesc") },
+              { value: "occurredAt:asc", label: t("sort.activityAsc") },
+              { value: "createdAt:desc", label: t("sort.recentlyAdded") },
+              { value: "updatedAt:desc", label: t("sort.recentlyUpdated") },
+              { value: "type:asc", label: t("sort.typeAsc") },
+              { value: "type:desc", label: t("sort.typeDesc") },
+            ]}
+          />
+        </ToolbarFilter>
       </DataToolbar>
       <QueryPanel
         query={query}

@@ -34,6 +34,7 @@ import { useI18n } from "@/i18n/provider";
 import { api } from "@/lib/api";
 import { navigateTo } from "@/lib/navigate";
 import { toQuery, useDebouncedValue } from "@/lib/query";
+import { sortParams, type SortSelection } from "@/lib/sorting";
 
 export function ContactsWorkspace() {
   const { t } = useI18n();
@@ -42,18 +43,20 @@ export function ContactsWorkspace() {
   const [search, setSearch] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [role, setRole] = useState("");
+  const [sort, setSort] = useState<SortSelection>("updatedAt:desc");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const debounced = useDebouncedValue(search);
 
   const query = useQuery({
-    queryKey: ["contacts", debounced, companyId, role, page],
+    queryKey: ["contacts", debounced, companyId, role, sort, page],
     queryFn: () =>
       api.get<PaginatedResult<ContactSummary>>(
         `/contacts${toQuery({
           search: debounced,
           companyId,
           decisionRole: role,
+          ...sortParams(sort),
           page,
           pageSize: 20,
         })}`,
@@ -93,6 +96,20 @@ export function ContactsWorkspace() {
               setCompanyId(value);
               setPage(1);
             }}
+          />
+        </ToolbarFilter>
+        <ToolbarFilter className="sm:min-w-60" label={t("filters.sort")}>
+          <EnumSelect
+            value={sort}
+            onChange={(value) => { setSort(value as SortSelection); setPage(1); }}
+            options={[
+              { value: "updatedAt:desc", label: t("sort.recentlyUpdated") },
+              { value: "createdAt:desc", label: t("sort.recentlyAdded") },
+              { value: "name:asc", label: t("sort.nameAsc") },
+              { value: "name:desc", label: t("sort.nameDesc") },
+              { value: "companyName:asc", label: t("sort.companyAsc") },
+              { value: "companyName:desc", label: t("sort.companyDesc") },
+            ]}
           />
         </ToolbarFilter>
         <ToolbarFilter className="sm:min-w-52" label={t("contacts.decisionRole")}>

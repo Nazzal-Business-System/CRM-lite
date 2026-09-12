@@ -67,6 +67,7 @@ import { api, ApiError } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { navigateTo } from "@/lib/navigate";
 import { toQuery, useDebouncedValue } from "@/lib/query";
+import { sortParams, type SortSelection } from "@/lib/sorting";
 
 const SCORE_OPTIONS = Array.from({ length: QUALIFICATION_MAX }, (_, index) => ({
   value: String(index + QUALIFICATION_MIN),
@@ -365,6 +366,7 @@ export function CompaniesWorkspace() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState("");
+  const [sort, setSort] = useState<SortSelection>("updatedAt:desc");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<CompanyDetail | null>(null);
@@ -373,7 +375,7 @@ export function CompaniesWorkspace() {
   const debouncedSearch = useDebouncedValue(search);
 
   const query = useQuery({
-    queryKey: ["companies", debouncedSearch, priority, page],
+    queryKey: ["companies", debouncedSearch, priority, sort, page],
     queryFn: () =>
       api.get<PaginatedResult<CompanySummary>>(
         `/companies${toQuery({
@@ -381,8 +383,7 @@ export function CompaniesWorkspace() {
           priority,
           page,
           pageSize: 20,
-          sort: "updatedAt",
-          order: "desc",
+          ...sortParams(sort),
         })}`,
       ),
     placeholderData: keepPreviousData,
@@ -468,6 +469,31 @@ export function CompaniesWorkspace() {
             ]}
             emptyLabel={t("filters.anyPriority")}
             placeholder={t("filters.anyPriority")}
+          />
+        </ToolbarFilter>
+        <ToolbarFilter className="sm:min-w-64" label={t("filters.sort")}>
+          <EnumSelect
+            value={sort}
+            onChange={(value) => {
+              setSort(value as SortSelection);
+              setPage(1);
+            }}
+            options={[
+              { value: "updatedAt:desc", label: t("sort.recentlyUpdated") },
+              { value: "updatedAt:asc", label: t("sort.oldestUpdated") },
+              { value: "createdAt:desc", label: t("sort.recentlyAdded") },
+              { value: "createdAt:asc", label: t("sort.oldestAdded") },
+              { value: "name:asc", label: t("sort.nameAsc") },
+              { value: "name:desc", label: t("sort.nameDesc") },
+              { value: "priority:desc", label: t("sort.priorityDesc") },
+              { value: "priority:asc", label: t("sort.priorityAsc") },
+              { value: "qualificationScore:desc", label: t("sort.qualificationDesc") },
+              { value: "qualificationScore:asc", label: t("sort.qualificationAsc") },
+              { value: "companySize:desc", label: t("sort.sizeDesc") },
+              { value: "companySize:asc", label: t("sort.sizeAsc") },
+              { value: "nextFollowUpAt:asc", label: t("sort.followUpAsc") },
+              { value: "nextFollowUpAt:desc", label: t("sort.followUpDesc") },
+            ]}
           />
         </ToolbarFilter>
       </DataToolbar>

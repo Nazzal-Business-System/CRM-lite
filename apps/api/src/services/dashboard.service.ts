@@ -80,7 +80,13 @@ export async function getDashboard(): Promise<DashboardData> {
       take: 8,
     }),
     // Sales/customer interactions only (Activity model — not audit/system events)
-    listActivities({ page: 1, pageSize: 5, search: "" }),
+    listActivities({
+      page: 1,
+      pageSize: 5,
+      search: "",
+      sort: "occurredAt",
+      order: "desc",
+    }),
     // Same derived-priority path as Companies High filter
     listCompanies({
       page: 1,

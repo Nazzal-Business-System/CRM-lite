@@ -42,6 +42,7 @@ import { api, ApiError } from "@/lib/api";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { navigateTo } from "@/lib/navigate";
 import { toQuery, useDebouncedValue } from "@/lib/query";
+import { sortParams, type SortSelection } from "@/lib/sorting";
 
 const useOpportunityView = create<{
   view: "board" | "list";
@@ -65,19 +66,21 @@ export function OpportunitiesWorkspace() {
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState("");
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortSelection>("updatedAt:desc");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const debounced = useDebouncedValue(search);
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["opportunities", view, debounced, stage, ownerId, page],
+    queryKey: ["opportunities", view, debounced, stage, ownerId, sort, page],
     queryFn: () =>
       api.get<PaginatedResult<OpportunitySummary>>(
         `/opportunities${toQuery({
           search: debounced,
           stage,
           ownerId,
+          ...sortParams(sort),
           page,
           pageSize: 20,
           view,
@@ -168,6 +171,26 @@ export function OpportunitiesWorkspace() {
             value={ownerId}
             onChange={setOwnerId}
             emptyLabel={t("common.allOwners")}
+          />
+        </ToolbarFilter>
+        <ToolbarFilter className="sm:min-w-64" label={t("filters.sort")}>
+          <EnumSelect
+            value={sort}
+            onChange={(value) => { setSort(value as SortSelection); setPage(1); }}
+            options={[
+              { value: "updatedAt:desc", label: t("sort.recentlyUpdated") },
+              { value: "createdAt:desc", label: t("sort.recentlyAdded") },
+              { value: "estimatedValue:desc", label: t("sort.valueDesc") },
+              { value: "estimatedValue:asc", label: t("sort.valueAsc") },
+              { value: "stage:asc", label: t("sort.stageAsc") },
+              { value: "stage:desc", label: t("sort.stageDesc") },
+              { value: "expectedCloseDate:asc", label: t("sort.closeAsc") },
+              { value: "expectedCloseDate:desc", label: t("sort.closeDesc") },
+              { value: "name:asc", label: t("sort.nameAsc") },
+              { value: "name:desc", label: t("sort.nameDesc") },
+              { value: "companyName:asc", label: t("sort.companyAsc") },
+              { value: "companyName:desc", label: t("sort.companyDesc") },
+            ]}
           />
         </ToolbarFilter>
       </DataToolbar>

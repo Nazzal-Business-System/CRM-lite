@@ -162,6 +162,15 @@ export async function listOpportunities(
 
   const board = query.view === "board";
   const { skip, take } = skipTake(query.page, query.pageSize);
+  const orderBy: Prisma.OpportunityOrderByWithRelationInput[] = [
+    query.sort === "companyName"
+      ? { company: { name: query.order } }
+      : query.sort === "estimatedValue" || query.sort === "expectedCloseDate"
+        ? { [query.sort]: { sort: query.order, nulls: "last" } }
+        : { [query.sort]: query.order },
+    { name: "asc" },
+    { id: "asc" },
+  ];
 
   const [rows, total] = await Promise.all([
     prisma.opportunity.findMany({
@@ -171,7 +180,7 @@ export async function listOpportunities(
         owner: { select: userRefSelect },
         primaryContact: { select: userRefSelect },
       },
-      orderBy: [{ updatedAt: "desc" }],
+      orderBy,
       ...(board ? {} : { skip, take }),
     }),
     prisma.opportunity.count({ where }),

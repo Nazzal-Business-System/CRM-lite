@@ -26,22 +26,21 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/provider";
 import { api } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, jordanDateKey } from "@/lib/format";
 import { toQuery, useDebouncedValue } from "@/lib/query";
+import { sortParams, type SortSelection } from "@/lib/sorting";
 import { cn } from "@/lib/utils";
 
 function dueClass(task: TaskRecord): string {
   if (task.status !== "OPEN") {
     return "text-muted-foreground";
   }
-  const due = new Date(task.dueAt);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  if (due < today) {
+  const due = jordanDateKey(task.dueAt);
+  const today = jordanDateKey(new Date());
+  if (due && today && due < today) {
     return "text-destructive font-medium";
   }
-  if (due.getTime() === today.getTime()) {
+  if (due === today) {
     return "text-warning font-medium";
   }
   return "text-muted-foreground";
@@ -53,19 +52,21 @@ export function TasksWorkspace() {
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState("all");
   const [due, setDue] = useState("");
+  const [sort, setSort] = useState<SortSelection>("dueAt:asc");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<TaskRecord | null>(null);
   const debounced = useDebouncedValue(search);
 
   const query = useQuery({
-    queryKey: ["tasks", debounced, scope, due, page],
+    queryKey: ["tasks", debounced, scope, due, sort, page],
     queryFn: () =>
       api.get<PaginatedResult<TaskRecord>>(
         `/tasks${toQuery({
           search: debounced,
           scope,
           due,
+          ...sortParams(sort),
           page,
           pageSize: 20,
         })}`,
@@ -115,6 +116,20 @@ export function TasksWorkspace() {
             options={[
               { value: "all", label: t("tasks.allTasks") },
               { value: "mine", label: t("tasks.myTasks") },
+            ]}
+          />
+        </ToolbarFilter>
+        <ToolbarFilter className="sm:min-w-60" label={t("filters.sort")}>
+          <EnumSelect
+            value={sort}
+            onChange={(value) => { setSort(value as SortSelection); setPage(1); }}
+            options={[
+              { value: "dueAt:asc", label: t("sort.dueAsc") },
+              { value: "dueAt:desc", label: t("sort.dueDesc") },
+              { value: "createdAt:desc", label: t("sort.recentlyAdded") },
+              { value: "updatedAt:desc", label: t("sort.recentlyUpdated") },
+              { value: "status:asc", label: t("sort.statusAsc") },
+              { value: "status:desc", label: t("sort.statusDesc") },
             ]}
           />
         </ToolbarFilter>

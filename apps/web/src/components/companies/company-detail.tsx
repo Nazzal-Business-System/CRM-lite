@@ -52,7 +52,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
-import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, jordanDateKey } from "@/lib/format";
 import { navigateTo } from "@/lib/navigate";
 import { toQuery } from "@/lib/query";
 import { cn } from "@/lib/utils";
@@ -61,15 +61,12 @@ function dueClass(dueAt: string, status: TaskRecord["status"]): string {
   if (status !== "OPEN") {
     return "text-muted-foreground";
   }
-  const due = new Date(dueAt);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dueDay = new Date(due);
-  dueDay.setHours(0, 0, 0, 0);
-  if (dueDay < today) {
+  const dueDay = jordanDateKey(dueAt);
+  const today = jordanDateKey(new Date());
+  if (dueDay && today && dueDay < today) {
     return "text-destructive";
   }
-  if (dueDay.getTime() === today.getTime()) {
+  if (dueDay === today) {
     return "text-warning";
   }
   return "text-muted-foreground";

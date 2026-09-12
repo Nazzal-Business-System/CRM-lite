@@ -37,6 +37,13 @@ const requiredText = (max: number, message: string) =>
   z.string().trim().min(1, message).max(max);
 
 const dateTimeValue = z.string().transform((value, ctx) => {
+  if (!/(?:[zZ]|[+-]\d{2}:\d{2})$/.test(value)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Date and time must include an explicit timezone.",
+    });
+    return z.NEVER;
+  }
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) {
     ctx.addIssue({ code: "custom", message: "Enter a valid date." });
@@ -105,7 +112,7 @@ export const companyListQuerySchema = paginationQuerySchema.extend({
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]).optional(),
   ownerId: z.string().optional(),
   sort: z
-    .enum(["name", "priority", "qualificationScore", "updatedAt", "createdAt"])
+    .enum(["name", "priority", "qualificationScore", "companySize", "nextFollowUpAt", "updatedAt", "createdAt"])
     .default("updatedAt"),
   order: z.enum(["asc", "desc"]).default("desc"),
 });
@@ -162,6 +169,8 @@ export type UpdateHypothesisInput = z.infer<typeof updateHypothesisSchema>;
 export const contactListQuerySchema = paginationQuerySchema.extend({
   companyId: z.string().optional(),
   decisionRole: z.enum(DECISION_ROLES).optional(),
+  sort: z.enum(["createdAt", "updatedAt", "name", "companyName"]).default("updatedAt"),
+  order: z.enum(["asc", "desc"]).default("desc"),
 });
 export type ContactListQuery = z.infer<typeof contactListQuerySchema>;
 
@@ -199,6 +208,8 @@ export const opportunityListQuerySchema = paginationQuerySchema.extend({
   ownerId: z.string().optional(),
   companyId: z.string().optional(),
   view: z.enum(["list", "board"]).optional(),
+  sort: z.enum(["createdAt", "updatedAt", "estimatedValue", "stage", "expectedCloseDate", "name", "companyName"]).default("updatedAt"),
+  order: z.enum(["asc", "desc"]).default("desc"),
 });
 export type OpportunityListQuery = z.infer<typeof opportunityListQuerySchema>;
 
@@ -241,6 +252,8 @@ export const activityListQuerySchema = paginationQuerySchema.extend({
   contactId: z.string().optional(),
   opportunityId: z.string().optional(),
   ownerId: z.string().optional(),
+  sort: z.enum(["occurredAt", "createdAt", "updatedAt", "type"]).default("occurredAt"),
+  order: z.enum(["asc", "desc"]).default("desc"),
 });
 export type ActivityListQuery = z.infer<typeof activityListQuerySchema>;
 
@@ -276,6 +289,8 @@ export const taskListQuerySchema = paginationQuerySchema.extend({
   companyId: z.string().optional(),
   contactId: z.string().optional(),
   opportunityId: z.string().optional(),
+  sort: z.enum(["dueAt", "createdAt", "updatedAt", "status"]).default("dueAt"),
+  order: z.enum(["asc", "desc"]).default("asc"),
 });
 export type TaskListQuery = z.infer<typeof taskListQuerySchema>;
 
@@ -299,6 +314,8 @@ export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export const researchListQuerySchema = paginationQuerySchema.extend({
   companyId: z.string().optional(),
   hypothesisStatus: z.enum(HYPOTHESIS_STATUSES).optional(),
+  sort: z.enum(["createdAt", "updatedAt", "companyName"]).default("createdAt"),
+  order: z.enum(["asc", "desc"]).default("desc"),
 });
 export type ResearchListQuery = z.infer<typeof researchListQuerySchema>;
 

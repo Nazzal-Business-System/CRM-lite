@@ -135,11 +135,15 @@ export async function listTasks(
   };
 
   const { skip, take } = skipTake(query.page, query.pageSize);
+  const orderBy: Prisma.TaskOrderByWithRelationInput[] = [
+    { [query.sort]: query.order },
+    { id: "asc" },
+  ];
   const [rows, total] = await Promise.all([
     prisma.task.findMany({
       where,
       include: taskInclude,
-      orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+      orderBy,
       skip,
       take,
     }),

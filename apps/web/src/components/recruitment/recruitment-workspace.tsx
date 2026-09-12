@@ -63,7 +63,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
-import { formatDate } from "@/lib/format";
+import { formatDate, fromDateInput, toDateInput } from "@/lib/format";
 import { toQuery, useDebouncedValue } from "@/lib/query";
 
 type FormState = {
@@ -113,7 +113,7 @@ function formFromCandidate(candidate: RecruitmentCandidateDetail): FormState {
     experienceSummary: candidate.experienceSummary ?? "",
     notes: candidate.notes ?? "",
     nextAction: candidate.nextAction ?? "",
-    nextActionDate: candidate.nextActionDate ?? "",
+    nextActionDate: toDateInput(candidate.nextActionDate),
     compensationNotes: candidate.compensationNotes ?? "",
     rejectionReason: candidate.rejectionReason ?? "",
   };
@@ -162,7 +162,7 @@ export function RecruitmentWorkspace() {
         experienceSummary: form.experienceSummary || null,
         notes: form.notes || null,
         nextAction: form.nextAction || null,
-        nextActionDate: form.nextActionDate || null,
+        nextActionDate: fromDateInput(form.nextActionDate) ?? null,
         compensationNotes: form.compensationNotes || null,
         rejectionReason: form.rejectionReason || null,
       };

@@ -7,6 +7,7 @@ import type {
   UpdateEvidenceInput,
   UpdateHypothesisInput,
 } from "@nbs/shared";
+import { Prisma } from "../generated/prisma/client";
 import { skipTake, userRefSelect } from "../lib/crm";
 import { notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
@@ -227,6 +228,18 @@ export async function listResearch(query: ResearchListQuery) {
         }
       : {}),
   };
+  const evidenceOrderBy: Prisma.ResearchEvidenceOrderByWithRelationInput[] = [
+    query.sort === "companyName"
+      ? { company: { name: query.order } }
+      : { [query.sort]: query.order },
+    { id: "asc" },
+  ];
+  const hypothesisOrderBy: Prisma.HypothesisOrderByWithRelationInput[] = [
+    query.sort === "companyName"
+      ? { company: { name: query.order } }
+      : { [query.sort]: query.order },
+    { id: "asc" },
+  ];
 
   const [evidence, evidenceTotal, hypotheses, hypothesisTotal] = await Promise.all([
     prisma.researchEvidence.findMany({
@@ -235,7 +248,7 @@ export async function listResearch(query: ResearchListQuery) {
         createdBy: { select: userRefSelect },
         company: { select: { name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: evidenceOrderBy,
       skip,
       take,
     }),
@@ -246,7 +259,7 @@ export async function listResearch(query: ResearchListQuery) {
         createdBy: { select: userRefSelect },
         company: { select: { name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: hypothesisOrderBy,
       skip,
       take,
     }),

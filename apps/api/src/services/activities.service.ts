@@ -106,11 +106,15 @@ export async function listActivities(
   };
 
   const { skip, take } = skipTake(query.page, query.pageSize);
+  const orderBy: Prisma.ActivityOrderByWithRelationInput[] = [
+    { [query.sort]: query.order },
+    { id: "asc" },
+  ];
   const [rows, total] = await Promise.all([
     prisma.activity.findMany({
       where,
       include: activityInclude,
-      orderBy: { occurredAt: "desc" },
+      orderBy,
       skip,
       take,
     }),
