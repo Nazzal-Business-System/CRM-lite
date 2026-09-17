@@ -5,9 +5,10 @@ import {
   type ActivityRecord,
   type PaginatedResult,
 } from "@nbs/shared";
-import { useQuery } from "@tanstack/react-query";
-import { NotebookPen, Plus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { NotebookPen, Plus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ActivityFormDialog } from "@/components/activities/activity-form-dialog";
 import {
   CardListSkeleton,
@@ -24,8 +25,9 @@ import { EnumSelect } from "@/components/crm/selects";
 import { Can } from "@/components/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useI18n } from "@/i18n/provider";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { toQuery, useDebouncedValue } from "@/lib/query";
 import { sortParams, type SortSelection } from "@/lib/sorting";
@@ -36,6 +38,9 @@ export function ActivitiesWorkspace() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortSelection>("occurredAt:desc");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<ActivityRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ActivityRecord | null>(null);
+  const queryClient = useQueryClient();
   const debounced = useDebouncedValue(search);
   const query = useQuery({
     queryKey: ["activities", debounced, sort, page],
@@ -43,6 +48,25 @@ export function ActivitiesWorkspace() {
       api.get<PaginatedResult<ActivityRecord>>(
         `/activities${toQuery({ search: debounced, ...sortParams(sort), page, pageSize: 20 })}`,
       ),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/activities/${id}`),
+    onSuccess: async (_result, id) => {
+      queryClient.setQueriesData<PaginatedResult<ActivityRecord>>({ queryKey: ["activities"] }, (data) => data ? {
+        ...data,
+        items: data.items.filter((item) => item.id !== id),
+        total: data.items.some((item) => item.id === id) ? Math.max(0, data.total - 1) : data.total,
+      } : data);
+      setDeleteTarget(null);
+      toast.success(t("toasts.activityDeleted"));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["activities"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : t("activities.deleteFailed")),
   });
 
   return (
@@ -109,9 +133,15 @@ export function ActivitiesWorkspace() {
                     <Badge variant="secondary">
                       {t(`enums.activityType.${activity.type}`)}
                     </Badge>
-                    <span className="text-[13px] text-muted-foreground">
-                      {formatDateTime(activity.occurredAt, locale)}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[13px] text-muted-foreground">{formatDateTime(activity.occurredAt, locale)}</span>
+                      <Can permission={PERMISSION_KEYS.ACTIVITIES_UPDATE}>
+                        <Button size="icon" variant="ghost" className="size-8" aria-label={t("activities.edit")} onClick={() => setEditing(activity)}><Pencil className="size-4" /></Button>
+                      </Can>
+                      <Can permission={PERMISSION_KEYS.ACTIVITIES_DELETE}>
+                        <Button size="icon" variant="ghost" className="size-8 text-destructive" aria-label={t("activities.delete")} onClick={() => setDeleteTarget(activity)}><Trash2 className="size-4" /></Button>
+                      </Can>
+                    </div>
                   </div>
                   <p className="mt-2 text-sm font-medium">{activity.companyName}</p>
                   <p className="mt-1 text-sm leading-6">{activity.summary}</p>
@@ -135,6 +165,19 @@ export function ActivitiesWorkspace() {
         )}
       </QueryPanel>
       <ActivityFormDialog open={open} onOpenChange={setOpen} />
+      <ActivityFormDialog key={editing?.id ?? "edit"} activity={editing} open={Boolean(editing)} onOpenChange={(next) => { if (!next) setEditing(null); }} />
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(next) => { if (!next && !deleteMutation.isPending) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("activities.deleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("activities.deleteBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction disabled={deleteMutation.isPending} onClick={(event) => { event.preventDefault(); if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}>{deleteMutation.isPending ? t("common.saving") : t("common.delete")}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageFrame>
   );
 }

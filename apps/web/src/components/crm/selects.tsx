@@ -89,6 +89,7 @@ function SearchablePicker({
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     onSearch(search);
@@ -108,6 +109,7 @@ function SearchablePicker({
       <PopoverTrigger asChild>
         <Button
           type="button"
+          onClick={(event) => setPortalContainer(event.currentTarget.closest<HTMLElement>('[role="dialog"]'))}
           variant="outline"
           disabled={disabled}
           className={cn(
@@ -122,6 +124,7 @@ function SearchablePicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        container={portalContainer}
         className="w-[var(--radix-popover-trigger-width)] p-0"
         align="start"
         sideOffset={4}
@@ -140,7 +143,7 @@ function SearchablePicker({
             autoFocus
           />
         </div>
-        <div className="max-h-56 overflow-y-auto p-1">
+        <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
           {options.length === 0 ? (
             <p className="px-2 py-2 text-sm text-muted-foreground">
               {loading ? t("common.searching") : t("common.noMatches")}

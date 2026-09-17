@@ -271,6 +271,7 @@ export const createActivitySchema = z.object({
 export type CreateActivityInput = z.infer<typeof createActivitySchema>;
 
 export const updateActivitySchema = z.object({
+  companyId: z.string().min(1, "Company is required.").optional(),
   contactId: z.string().nullable().optional(),
   opportunityId: z.string().nullable().optional(),
   type: z.enum(ACTIVITY_TYPES).optional(),

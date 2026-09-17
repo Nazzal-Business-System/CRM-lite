@@ -11,7 +11,7 @@ import {
   type TaskRecord,
 } from "@nbs/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Handshake, LayoutGrid, List, Plus } from "lucide-react";
+import { Handshake, LayoutGrid, List, Plus, Trash2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -37,6 +37,7 @@ import { OpportunityFormDialog } from "@/components/opportunities/opportunity-fo
 import { Can } from "@/components/permission-gate";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
 import { formatDateTime, formatMoney } from "@/lib/format";
@@ -69,6 +70,7 @@ export function OpportunitiesWorkspace() {
   const [sort, setSort] = useState<SortSelection>("updatedAt:desc");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<OpportunitySummary | null>(null);
   const debounced = useDebouncedValue(search);
   const queryClient = useQueryClient();
 
@@ -104,6 +106,25 @@ export function OpportunitiesWorkspace() {
       );
     },
   });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/opportunities/${id}`),
+    onSuccess: async (_result, id) => {
+      queryClient.setQueriesData<PaginatedResult<OpportunitySummary>>({ queryKey: ["opportunities"] }, (data) => data ? {
+        ...data,
+        items: data.items.filter((item) => item.id !== id),
+        total: data.items.some((item) => item.id === id) ? Math.max(0, data.total - 1) : data.total,
+      } : data);
+      queryClient.removeQueries({ queryKey: ["opportunity", id] });
+      setDeleteTarget(null);
+      toast.success(t("toasts.opportunityDeleted"));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies"] }),
+      ]);
+    },
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : t("opportunities.deleteFailed")),
+  });
 
   return (
     <PageFrame width="full">
@@ -113,10 +134,12 @@ export function OpportunitiesWorkspace() {
         count={query.data?.total}
         actions={
           <>
-            <div className="flex rounded-lg bg-muted p-1">
+            <div className="flex rounded-lg border border-border bg-muted/70 p-1" role="group" aria-label={t("opportunities.viewMode")}>
               <Button
                 size="sm"
                 variant={view === "board" ? "secondary" : "ghost"}
+                aria-pressed={view === "board"}
+                className={view === "board" ? "border border-border bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}
                 onClick={() => setView("board")}
               >
                 <LayoutGrid className="size-4" />
@@ -125,6 +148,8 @@ export function OpportunitiesWorkspace() {
               <Button
                 size="sm"
                 variant={view === "list" ? "secondary" : "ghost"}
+                aria-pressed={view === "list"}
+                className={view === "list" ? "border border-border bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}
                 onClick={() => setView("list")}
               >
                 <List className="size-4" />
@@ -248,6 +273,9 @@ export function OpportunitiesWorkspace() {
                           draggable
                           onDragStart={(event) => event.dataTransfer.setData("text/plain", item.id)}
                           className="cursor-pointer rounded-lg bg-card px-3 py-2.5 shadow-[0_1px_1px_oklch(0.2_0.03_255_/_0.05)] ring-1 ring-border/60"
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigateTo(router, `/opportunities/${item.id}`, pathname); } }}
                           onClick={() => navigateTo(router, `/opportunities/${item.id}`, pathname)}
                         >
                           <p className="text-[13px] text-muted-foreground">{item.companyName}</p>
@@ -256,6 +284,9 @@ export function OpportunitiesWorkspace() {
                             {formatMoney(item.estimatedValue, locale)} ·{" "}
                             {item.owner?.name ?? t("common.unassigned")}
                           </p>
+                          <Can permission={PERMISSION_KEYS.OPPORTUNITIES_DELETE}>
+                            <Button size="icon" variant="ghost" className="mt-1 size-8 text-destructive" aria-label={t("opportunities.delete")} onKeyDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setDeleteTarget(item); }}><Trash2 className="size-4" /></Button>
+                          </Can>
                         </article>
                       ))}
                     </div>
@@ -267,10 +298,12 @@ export function OpportunitiesWorkspace() {
             <>
               <div className="space-y-2">
                 {data.items.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-border/80 bg-card px-4 py-3.5 text-left"
+                    className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-border/80 bg-card px-4 py-3.5 text-start"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigateTo(router, `/opportunities/${item.id}`, pathname); } }}
                     onClick={() => navigateTo(router, `/opportunities/${item.id}`, pathname)}
                   >
                     <div className="min-w-0">
@@ -279,11 +312,14 @@ export function OpportunitiesWorkspace() {
                         {item.companyName} · {t(`enums.opportunityStage.${item.stage}`)}
                       </p>
                     </div>
-                    <div className="text-right text-sm">
+                    <div className="text-end text-sm">
                       <p className="tabular-nums">{formatMoney(item.estimatedValue, locale)}</p>
                       <p className="text-muted-foreground">{item.probability}%</p>
                     </div>
-                  </button>
+                    <Can permission={PERMISSION_KEYS.OPPORTUNITIES_DELETE}>
+                      <Button size="icon" variant="ghost" className="size-8 text-destructive" aria-label={t("opportunities.delete")} onKeyDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setDeleteTarget(item); }}><Trash2 className="size-4" /></Button>
+                    </Can>
+                  </div>
                 ))}
               </div>
               <PaginationBar
@@ -297,6 +333,12 @@ export function OpportunitiesWorkspace() {
         }
       </QueryPanel>
       <OpportunityFormDialog open={open} onOpenChange={setOpen} />
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(next) => { if (!next && !deleteMutation.isPending) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>{t("opportunities.deleteTitle", { name: deleteTarget?.name ?? "" })}</AlertDialogTitle><AlertDialogDescription>{t("opportunities.deleteBody")}</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={deleteMutation.isPending}>{t("common.cancel")}</AlertDialogCancel><AlertDialogAction disabled={deleteMutation.isPending} onClick={(event) => { event.preventDefault(); if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}>{deleteMutation.isPending ? t("common.saving") : t("common.delete")}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageFrame>
   );
 }
@@ -308,6 +350,22 @@ export function OpportunityDetailView({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/opportunities/${id}`),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ["opportunity", id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies"] }),
+      ]);
+      toast.success(t("toasts.opportunityDeleted"));
+      navigateTo(router, "/opportunities", pathname);
+    },
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : t("opportunities.deleteFailed")),
+  });
   const query = useQuery({
     queryKey: ["opportunity", id],
     queryFn: () => api.get<{ opportunity: OpportunityDetail }>(`/opportunities/${id}`),
@@ -364,6 +422,9 @@ export function OpportunityDetailView({ id }: { id: string }) {
                   </Can>
                   <Can permission={PERMISSION_KEYS.OPPORTUNITIES_UPDATE}>
                     <Button onClick={() => setOpen(true)}>{t("common.edit")}</Button>
+                  </Can>
+                  <Can permission={PERMISSION_KEYS.OPPORTUNITIES_DELETE}>
+                    <Button variant="outline" className="text-destructive" onClick={() => setDeleteOpen(true)}>{t("common.delete")}</Button>
                   </Can>
                 </div>
               </div>
@@ -466,6 +527,12 @@ export function OpportunityDetailView({ id }: { id: string }) {
                 </Surface>
               </div>
               <OpportunityFormDialog open={open} onOpenChange={setOpen} opportunity={opportunity} />
+              <AlertDialog open={deleteOpen} onOpenChange={(next) => { if (!deleteMutation.isPending) setDeleteOpen(next); }}>
+                <AlertDialogContent>
+                  <AlertDialogHeader><AlertDialogTitle>{t("opportunities.deleteTitle", { name: opportunity.name })}</AlertDialogTitle><AlertDialogDescription>{t("opportunities.deleteBody")}</AlertDialogDescription></AlertDialogHeader>
+                  <AlertDialogFooter><AlertDialogCancel disabled={deleteMutation.isPending}>{t("common.cancel")}</AlertDialogCancel><AlertDialogAction disabled={deleteMutation.isPending} onClick={(event) => { event.preventDefault(); deleteMutation.mutate(); }}>{deleteMutation.isPending ? t("common.saving") : t("common.delete")}</AlertDialogAction></AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <ActivityFormDialog
                 open={activityOpen}
                 onOpenChange={setActivityOpen}

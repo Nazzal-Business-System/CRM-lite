@@ -95,6 +95,16 @@ async function assertTaskRelations(input: {
   }
 }
 
+async function assertActiveOwner(ownerId: string) {
+  const owner = await prisma.user.findUnique({
+    where: { id: ownerId },
+    select: { isActive: true },
+  });
+  if (!owner?.isActive) {
+    throw badRequest("Owner must be an active CRM user.");
+  }
+}
+
 export async function listTasks(
   query: TaskListQuery,
   currentUserId: string,
@@ -160,13 +170,7 @@ export async function listTasks(
 
 export async function createTask(input: CreateTaskInput) {
   await assertTaskRelations(input);
-  const owner = await prisma.user.findUnique({
-    where: { id: input.ownerId },
-    select: { id: true },
-  });
-  if (!owner) {
-    throw notFound("Owner not found.");
-  }
+  await assertActiveOwner(input.ownerId);
 
   const row = await prisma.task.create({
     data: {
@@ -187,6 +191,9 @@ export async function updateTask(id: string, input: UpdateTaskInput) {
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Task not found.");
+  }
+  if (input.ownerId !== undefined) {
+    await assertActiveOwner(input.ownerId);
   }
 
   await assertTaskRelations({

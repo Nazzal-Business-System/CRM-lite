@@ -11,7 +11,7 @@ import {
 } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
 import { decimalToString, skipTake, userRefSelect, weightedFrom } from "../lib/crm";
-import { badRequest, conflict, notFound } from "../lib/errors";
+import { badRequest, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
 
 function serializeOpportunity(
@@ -345,17 +345,9 @@ export async function updateOpportunity(id: string, input: UpdateOpportunityInpu
 }
 
 export async function deleteOpportunity(id: string) {
-  const existing = await prisma.opportunity.findUnique({
-    where: { id },
-    include: { _count: { select: { activities: true, tasks: true } } },
-  });
+  const existing = await prisma.opportunity.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Opportunity not found.");
-  }
-  if (existing._count.activities > 0 || existing._count.tasks > 0) {
-    throw conflict(
-      "This opportunity cannot be deleted because it has activities or follow-ups.",
-    );
   }
   await prisma.opportunity.delete({ where: { id } });
   return { ok: true };

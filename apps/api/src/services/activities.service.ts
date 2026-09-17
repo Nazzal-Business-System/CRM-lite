@@ -181,7 +181,7 @@ export async function updateActivity(id: string, input: UpdateActivityInput) {
   }
 
   await assertRelations(
-    existing.companyId,
+    input.companyId ?? existing.companyId,
     input.contactId === undefined ? existing.contactId : input.contactId,
     input.opportunityId === undefined ? existing.opportunityId : input.opportunityId,
   );
@@ -189,6 +189,7 @@ export async function updateActivity(id: string, input: UpdateActivityInput) {
   const row = await prisma.activity.update({
     where: { id },
     data: {
+      ...(input.companyId !== undefined ? { companyId: input.companyId } : {}),
       ...(input.contactId !== undefined ? { contactId: input.contactId } : {}),
       ...(input.opportunityId !== undefined
         ? { opportunityId: input.opportunityId }

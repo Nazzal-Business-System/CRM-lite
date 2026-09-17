@@ -5,6 +5,7 @@ import {
   PERMISSION_KEYS,
   type ActivityRecord,
   type CreateActivityInput,
+  type UpdateActivityInput,
 } from "@nbs/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -34,32 +35,35 @@ export function ActivityFormDialog({
   companyId,
   opportunityId,
   contactId,
+  activity,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   companyId?: string;
   opportunityId?: string;
   contactId?: string;
+  activity?: ActivityRecord | null;
 }) {
   const { t } = useI18n();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [type, setType] = useState("MEETING");
-  const [selectedCompanyId, setSelectedCompanyId] = useState(companyId ?? "");
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(contactId ?? null);
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState(opportunityId ?? "");
-  const [occurredAt, setOccurredAt] = useState(new Date().toISOString());
-  const [summary, setSummary] = useState("");
-  const [outcome, setOutcome] = useState("");
+  const [type, setType] = useState<string>(activity?.type ?? "MEETING");
+  const [selectedCompanyId, setSelectedCompanyId] = useState(activity?.companyId ?? companyId ?? "");
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(activity?.contactId ?? contactId ?? null);
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState(activity?.opportunityId ?? opportunityId ?? "");
+  const [occurredAt, setOccurredAt] = useState(activity?.occurredAt ?? new Date().toISOString());
+  const [summary, setSummary] = useState(activity?.summary ?? "");
+  const [outcome, setOutcome] = useState(activity?.outcome ?? "");
   const [createFollowUp, setCreateFollowUp] = useState(false);
   const [followUpTitle, setFollowUpTitle] = useState("");
   const [followUpDue, setFollowUpDue] = useState("");
 
   const mutation = useMutation({
-    mutationFn: (input: CreateActivityInput) =>
-      api.post<{ activity: ActivityRecord }>("/activities", input),
+    mutationFn: (input: CreateActivityInput) => activity
+      ? api.patch<{ activity: ActivityRecord }>(`/activities/${activity.id}`, input as UpdateActivityInput)
+      : api.post<{ activity: ActivityRecord }>("/activities", input),
     onSuccess: async () => {
-      toast.success(t("toasts.activityLogged"));
+      toast.success(t(activity ? "toasts.activityUpdated" : "toasts.activityLogged"));
       onOpenChange(false);
       setSummary("");
       setOutcome("");
@@ -71,6 +75,7 @@ export function ActivityFormDialog({
         queryClient.invalidateQueries({ queryKey: ["tasks"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["companies"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
       ]);
       await queryClient.refetchQueries({ queryKey: ["dashboard"] });
     },
@@ -85,21 +90,26 @@ export function ActivityFormDialog({
       onOpenChange={(next) => {
         onOpenChange(next);
         if (next) {
-          setSelectedCompanyId(companyId ?? selectedCompanyId);
-          setSelectedContactId(contactId ?? selectedContactId);
-          setSelectedOpportunityId(opportunityId ?? selectedOpportunityId);
+          setSelectedCompanyId(activity?.companyId ?? companyId ?? "");
+          setSelectedContactId(activity?.contactId ?? contactId ?? null);
+          setSelectedOpportunityId(activity?.opportunityId ?? opportunityId ?? "");
+          setType(activity?.type ?? "MEETING");
+          setOccurredAt(activity?.occurredAt ?? new Date().toISOString());
+          setSummary(activity?.summary ?? "");
+          setOutcome(activity?.outcome ?? "");
         }
       }}
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("activities.add")}</DialogTitle>
+          <DialogTitle>{t(activity ? "activities.edit" : "activities.add")}</DialogTitle>
           <DialogDescription>{t("activities.formDescription")}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
+            if (mutation.isPending) return;
             mutation.mutate({
               companyId: selectedCompanyId,
               contactId: selectedContactId,
@@ -110,7 +120,7 @@ export function ActivityFormDialog({
               outcome: outcome.trim() || null,
               ownerId: user?.id,
               nextTask:
-                createFollowUp && followUpTitle && followUpDue
+                !activity && createFollowUp && followUpTitle && followUpDue
                   ? {
                       title: followUpTitle,
                       dueAt: followUpDue,
@@ -138,6 +148,7 @@ export function ActivityFormDialog({
                 onChange={(value) => {
                   setSelectedCompanyId(value);
                   setSelectedContactId(null);
+                  setSelectedOpportunityId("");
                 }}
               />
             </FormField>
@@ -172,7 +183,7 @@ export function ActivityFormDialog({
               onChange={(event) => setOutcome(event.target.value)}
             />
           </FormField>
-          <Can permission={PERMISSION_KEYS.TASKS_CREATE}>
+          {!activity ? <Can permission={PERMISSION_KEYS.TASKS_CREATE}>
             <label className="flex items-center gap-2 py-2 text-sm">
               <Checkbox
                 checked={createFollowUp}
@@ -200,13 +211,13 @@ export function ActivityFormDialog({
                 </FormField>
               </div>
             ) : null}
-          </Can>
+          </Can> : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
-              {t("activities.save")}
+              {t(activity ? "activities.saveEdit" : "activities.save")}
             </Button>
           </DialogFooter>
         </form>

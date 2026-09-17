@@ -57,9 +57,12 @@ export function TaskFormDialog({
     onSuccess: async () => {
       toast.success(task ? t("toasts.followUpUpdated") : t("toasts.followUpCreated"));
       onOpenChange(false);
-      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      await queryClient.invalidateQueries({ queryKey: ["companies"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+      ]);
     },
     onError: (error) => {
       toast.error(error instanceof ApiError ? error.message : t("tasks.saveFailed"));
@@ -89,6 +92,7 @@ export function TaskFormDialog({
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
+            if (mutation.isPending) return;
             if (!ownerId || !dueAt) {
               return;
             }

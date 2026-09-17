@@ -113,6 +113,7 @@ export function OpportunityFormDialog({
       );
       onOpenChange(false);
       await queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      if (opportunity) await queryClient.invalidateQueries({ queryKey: ["opportunity", opportunity.id] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["companies"] });
     },
