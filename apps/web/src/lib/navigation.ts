@@ -12,6 +12,7 @@ import {
   Users,
   ClipboardCheck,
   ScrollText,
+  ChartNoAxesCombined,
 } from "lucide-react";
 import { PERMISSION_KEYS, type PermissionKey } from "@nbs/shared";
 import type { LucideIcon } from "lucide-react";
@@ -107,6 +108,12 @@ export const NAV_SECTIONS: NavSection[] = [
         permission: PERMISSION_KEYS.RECRUITMENT_VIEW,
       },
       {
+        href: "/admin/sales-performance",
+        label: "Sales Performance",
+        icon: ChartNoAxesCombined,
+        permission: PERMISSION_KEYS.SALES_PERFORMANCE_VIEW,
+      },
+      {
         href: "/admin/ownership-requests",
         label: "Ownership Requests",
         icon: ClipboardCheck,
@@ -136,6 +143,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/admin/recruitment": "Sales Recruitment",
   "/admin/ownership-requests": "Ownership Requests",
   "/admin/audit-logs": "Audit Logs",
+  "/admin/sales-performance": "Sales Performance",
   "/notifications": "Notifications",
 };
 

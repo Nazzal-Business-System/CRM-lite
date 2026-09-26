@@ -19,6 +19,7 @@ import { usersRouter } from "./routes/users";
 import { auditLogsRouter } from "./routes/audit-logs";
 import { notificationsRouter } from "./routes/notifications";
 import { ownershipRequestsRouter } from "./routes/ownership-requests";
+import { salesPerformanceRouter } from "./routes/sales-performance";
 import { prisma } from "./lib/prisma";
 
 export function createApp() {
@@ -87,6 +88,7 @@ export function createApp() {
   app.use("/api/audit-logs", auditLogsRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/ownership-requests", ownershipRequestsRouter);
+  app.use("/api/sales-performance", salesPerformanceRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,5 +1,6 @@
 export const PERMISSION_KEYS = {
   DASHBOARD_VIEW: "dashboard.view",
+  SALES_PERFORMANCE_VIEW: "sales_performance.view",
 
   COMPANIES_VIEW: "companies.view",
   COMPANIES_CREATE: "companies.create",
@@ -56,6 +57,7 @@ export type PermissionKey =
 
 export const PERMISSION_CATEGORIES = [
   "Dashboard",
+  "Sales Performance",
   "Companies",
   "Contacts",
   "Opportunities",
@@ -82,6 +84,12 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
     key: PERMISSION_KEYS.DASHBOARD_VIEW,
     description: "View the CRM dashboard",
     category: "Dashboard",
+    actionLabel: "View",
+  },
+  {
+    key: PERMISSION_KEYS.SALES_PERFORMANCE_VIEW,
+    description: "View admin sales performance reporting",
+    category: "Sales Performance",
     actionLabel: "View",
   },
   {

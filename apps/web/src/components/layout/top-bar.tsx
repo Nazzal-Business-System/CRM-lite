@@ -24,6 +24,8 @@ export function TopBar() {
       ? "nav.dashboard"
       : pathname.startsWith("/admin/recruitment")
         ? "nav.recruitment"
+        : pathname.startsWith("/admin/sales-performance")
+          ? "nav.salesPerformance"
         : pathname.startsWith("/admin/ownership-requests")
           ? "nav.ownershipRequests"
           : pathname.startsWith("/admin/audit-logs")

@@ -30,7 +30,7 @@ export function isServiceUnavailable(error: unknown): boolean {
 
 type ApiEnvelope<T> =
   | { data: T; error?: undefined }
-  | { data?: undefined; error: ApiErrorBody };
+  | { data?: undefined; error: ApiErrorBody | string };
 
 function serviceUnavailableError(status = 503): ApiError {
   return new ApiError(status, "SERVICE_UNAVAILABLE", SERVICE_UNAVAILABLE_MESSAGE);
@@ -55,7 +55,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok || !payload || !("data" in payload) || payload.data === undefined) {
     const error = payload && "error" in payload ? payload.error : undefined;
 
-    if (error) {
+    if (typeof error === "string" && error.trim()) {
+      throw new ApiError(response.status, "REQUEST_FAILED", error);
+    }
+
+    if (error && typeof error === "object") {
       throw new ApiError(
         response.status,
         error.code ?? "REQUEST_FAILED",

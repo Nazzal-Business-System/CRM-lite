@@ -28,6 +28,7 @@ const NAV_LABEL_KEYS: Record<string, string> = {
   "/admin/recruitment": "nav.recruitment",
   "/admin/ownership-requests": "nav.ownershipRequests",
   "/admin/audit-logs": "nav.auditLogs",
+  "/admin/sales-performance": "nav.salesPerformance",
 };
 
 function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {

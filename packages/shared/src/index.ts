@@ -16,6 +16,24 @@ export {
 } from "./permissions";
 
 export {
+  SALES_PERFORMANCE_PERIODS,
+  salesPerformanceQuerySchema,
+  type ActivityBreakdownItem,
+  type ActivityTrendItem,
+  type PerformanceActivity,
+  type PerformanceCompany,
+  type PerformanceKpis,
+  type PerformanceOpportunity,
+  type PerformanceRange,
+  type PerformanceTask,
+  type SalesPerformancePeriod,
+  type SalesPerformanceQuery,
+  type SalesPerformanceSummary,
+  type SalespersonPerformance,
+  type SalespersonPerformanceDetail,
+} from "./sales-performance";
+
+export {
   createRoleSchema,
   createUserSchema,
   loginSchema,
