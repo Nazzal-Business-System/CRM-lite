@@ -4,11 +4,15 @@ import type {
   TaskListQuery,
   TaskRecord,
   UpdateTaskInput,
+  AuthUser,
 } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
 import { endOfDay, skipTake, startOfDay, userRefSelect } from "../lib/crm";
 import { badRequest, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
+import { createNotification } from "./notifications.service";
+import { assertOwnerUpdateAllowed, ownerForCreate } from "./ownership-policy";
 
 const taskInclude = {
   owner: { select: userRefSelect },
@@ -168,31 +172,39 @@ export async function listTasks(
   };
 }
 
-export async function createTask(input: CreateTaskInput) {
+export async function createTask(input: CreateTaskInput, actor: AuthUser) {
   await assertTaskRelations(input);
-  await assertActiveOwner(input.ownerId);
+  const ownerId = ownerForCreate(actor, input.ownerId);
+  if (!ownerId) throw badRequest("Owner is required.");
+  await assertActiveOwner(ownerId);
 
   const row = await prisma.task.create({
     data: {
       title: input.title,
       description: input.description ?? null,
       dueAt: new Date(input.dueAt),
-      ownerId: input.ownerId,
+      ownerId,
       companyId: input.companyId ?? null,
       contactId: input.contactId ?? null,
       opportunityId: input.opportunityId ?? null,
     },
     include: taskInclude,
   });
-  return serializeTask(row);
+  const task = serializeTask(row);
+  await writeAuditLog({ actorUserId: actor.id, action: "TASK_CREATED", entityType: "TASK", entityId: task.id, entityLabel: task.title, metadata: { ownerId: task.owner.id } });
+  if (task.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: task.owner.id, type: "TASK_ASSIGNED", title: "Task assigned to you", message: `${task.title} was assigned to you.`, titleAr: "تم تعيين مهمة لك", messageAr: `تم تعيين ${task.title} لك.`, entityType: "TASK", entityId: task.id, link: "/tasks" });
+  }
+  return task;
 }
 
-export async function updateTask(id: string, input: UpdateTaskInput) {
-  const existing = await prisma.task.findUnique({ where: { id } });
+export async function updateTask(id: string, input: UpdateTaskInput, actor: AuthUser) {
+  const existing = await prisma.task.findUnique({ where: { id }, include: { owner: { select: userRefSelect } } });
   if (!existing) {
     throw notFound("Task not found.");
   }
   if (input.ownerId !== undefined) {
+    assertOwnerUpdateAllowed(actor, existing.ownerId, input.ownerId);
     await assertActiveOwner(input.ownerId);
   }
 
@@ -229,18 +241,34 @@ export async function updateTask(id: string, input: UpdateTaskInput) {
     include: taskInclude,
   });
 
-  return serializeTask(row);
+  const task = serializeTask(row);
+  const changes = conciseChanges(
+    { ...existing, owner: existing.owner.name },
+    { ...task, owner: task.owner.name },
+    ["title", "description", "dueAt", "status", "owner", "companyId", "contactId", "opportunityId", "completedAt"],
+  );
+  const ownerChanged = existing.ownerId !== task.owner.id;
+  const statusChanged = existing.status !== task.status;
+  await writeAuditLog({ actorUserId: actor.id, action: ownerChanged ? "TASK_OWNER_CHANGED" : statusChanged ? (task.status === "COMPLETED" ? "TASK_COMPLETED" : "TASK_REOPENED") : "TASK_UPDATED", entityType: "TASK", entityId: id, entityLabel: task.title, changes });
+  if (ownerChanged && task.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: task.owner.id, type: "TASK_ASSIGNED", title: "Task assigned to you", message: `${task.title} was assigned to you.`, titleAr: "تم تعيين مهمة لك", messageAr: `تم تعيين ${task.title} لك.`, entityType: "TASK", entityId: id, link: "/tasks" });
+  }
+  if (ownerChanged && existing.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: existing.owner.id, type: "TASK_REASSIGNED", title: "Task reassigned", message: `${task.title} was reassigned.`, titleAr: "تمت إعادة تعيين المهمة", messageAr: `تمت إعادة تعيين ${task.title}.`, entityType: "TASK", entityId: id, link: "/tasks" });
+  }
+  return task;
 }
 
-export async function completeTask(id: string) {
-  return updateTask(id, { status: "COMPLETED" });
+export async function completeTask(id: string, actor: AuthUser) {
+  return updateTask(id, { status: "COMPLETED" }, actor);
 }
 
-export async function deleteTask(id: string) {
+export async function deleteTask(id: string, actorUserId: string) {
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Task not found.");
   }
   await prisma.task.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "TASK_DELETED", entityType: "TASK", entityId: id, entityLabel: existing.title });
   return { ok: true };
 }

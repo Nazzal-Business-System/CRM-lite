@@ -4,7 +4,8 @@ import type { CreateTaskInput, TaskRecord } from "@nbs/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CompanySelect, ContactSelect, FormField, UserSelect } from "@/components/crm/selects";
+import { CompanySelect, ContactSelect, FormField } from "@/components/crm/selects";
+import { OwnerControl } from "@/components/ownership/owner-control";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -119,7 +120,13 @@ export function TaskFormDialog({
             />
           </FormField>
           <FormField label={t("tasks.owner")} required>
-            <UserSelect value={ownerId} onChange={setOwnerId} />
+            <OwnerControl
+              entityType="TASK"
+              entityId={task?.id}
+              owner={task?.owner ?? null}
+              value={ownerId}
+              onChange={setOwnerId}
+            />
           </FormField>
           {!companyId ? (
             <FormField label={t("tasks.company")}>

@@ -32,7 +32,8 @@ import {
   ToolbarFilter,
   ToolbarSearch,
 } from "@/components/crm/primitives";
-import { EnumSelect, FormField, UserSelect } from "@/components/crm/selects";
+import { EnumSelect, FormField } from "@/components/crm/selects";
+import { OwnerControl } from "@/components/ownership/owner-control";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -316,9 +317,11 @@ export function CompanyFormDialog({
             />
           </FormField>
           <FormField label={t("companies.owner")} error={errors.ownerId}>
-            <UserSelect
+            <OwnerControl
+              entityType="COMPANY"
+              entityId={company?.id}
+              owner={company?.owner ?? null}
               allowEmpty
-              emptyLabel={t("common.unassigned")}
               value={form.ownerId}
               onChange={(value) => setForm({ ...form, ownerId: value })}
             />
@@ -526,21 +529,32 @@ export function CompaniesWorkspace() {
       >
         {(data) => (
           <>
-            <Surface className="hidden md:block">
-              <Table className="table-fixed w-full">
+            <Surface className="hidden min-w-0 overflow-hidden md:block">
+              <Table className="w-full min-w-[87.5rem] table-fixed">
+                <colgroup>
+                  <col className="w-[13.5rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[11rem]" />
+                  <col className="w-[10.5rem]" />
+                </colgroup>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[20%]">{t("companies.company")}</TableHead>
-                    <TableHead className="w-[12%]">{t("companies.sector")}</TableHead>
-                    <TableHead className="w-[7%]">{t("companies.size")}</TableHead>
-                    <TableHead className="w-[12%]">{t("companies.qualification")}</TableHead>
-                    <TableHead className="w-[8%]">{t("companies.priority")}</TableHead>
-                    <TableHead className="w-[11%]">{t("companies.owner")}</TableHead>
-                    <TableHead className="w-[7%] text-center">
+                  <TableRow className="[&_th]:whitespace-nowrap">
+                    <TableHead>{t("companies.company")}</TableHead>
+                    <TableHead>{t("companies.sector")}</TableHead>
+                    <TableHead>{t("companies.size")}</TableHead>
+                    <TableHead>{t("companies.qualification")}</TableHead>
+                    <TableHead>{t("companies.priority")}</TableHead>
+                    <TableHead>{t("companies.owner")}</TableHead>
+                    <TableHead className="whitespace-nowrap text-center">
                       {t("companies.opportunities")}
                     </TableHead>
-                    <TableHead className="w-[11%]">{t("companies.nextFollowUp")}</TableHead>
-                    <TableHead className="w-[12%] text-end">
+                    <TableHead>{t("companies.nextFollowUp")}</TableHead>
+                    <TableHead className="text-end">
                       {t("companies.actions")}
                     </TableHead>
                   </TableRow>

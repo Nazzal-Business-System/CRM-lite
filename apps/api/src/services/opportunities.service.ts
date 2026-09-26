@@ -8,11 +8,15 @@ import {
   type OpportunitySummary,
   type PaginatedResult,
   type UpdateOpportunityInput,
+  type AuthUser,
 } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
 import { decimalToString, skipTake, userRefSelect, weightedFrom } from "../lib/crm";
 import { badRequest, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
+import { createNotification } from "./notifications.service";
+import { assertOwnerUpdateAllowed, ownerForCreate } from "./ownership-policy";
 
 function serializeOpportunity(
   row: {
@@ -75,6 +79,13 @@ async function requireCompany(companyId: string) {
   if (!company) {
     throw notFound("Company not found.");
   }
+}
+
+async function assertActiveOwner(ownerId: string | null | undefined) {
+  if (!ownerId) return ownerId ?? null;
+  const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, isActive: true } });
+  if (!owner?.isActive) throw badRequest("Owner must be an active CRM user.");
+  return owner.id;
 }
 
 async function requireContactInCompany(
@@ -233,13 +244,14 @@ export async function getOpportunity(id: string): Promise<OpportunityDetail> {
   return serializeOpportunity(row, next._min.dueAt?.toISOString() ?? null);
 }
 
-export async function createOpportunity(input: CreateOpportunityInput) {
+export async function createOpportunity(input: CreateOpportunityInput, actor: AuthUser) {
   await requireCompany(input.companyId);
   const primaryContactId = await requireContactInCompany(
     input.primaryContactId,
     input.companyId,
   );
   const stage = input.stage ?? "TARGET";
+  const ownerId = await assertActiveOwner(ownerForCreate(actor, input.ownerId));
   const patch = stagePatch(
     stage,
     { stage: "TARGET", probability: defaultProbabilityForStage("TARGET"), lostReason: null },
@@ -262,7 +274,7 @@ export async function createOpportunity(input: CreateOpportunityInput) {
       proposedSolution: input.proposedSolution ?? null,
       estimatedValue: input.estimatedValue ?? null,
       source: input.source ?? null,
-      ownerId: input.ownerId ?? null,
+      ownerId,
       commissionRepresentativeId: input.commissionRepresentativeId ?? null,
       expectedCloseDate: input.expectedCloseDate
         ? new Date(input.expectedCloseDate)
@@ -271,14 +283,21 @@ export async function createOpportunity(input: CreateOpportunityInput) {
     },
   });
 
-  return getOpportunity(row.id);
+  const result = await getOpportunity(row.id);
+  await writeAuditLog({ actorUserId: actor.id, action: "OPPORTUNITY_CREATED", entityType: "OPPORTUNITY", entityId: row.id, entityLabel: row.name, metadata: { ownerId: result.owner?.id ?? null, stage: result.stage } });
+  if (result.owner && result.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: result.owner.id, type: "OPPORTUNITY_ASSIGNED", title: "Opportunity assigned to you", message: `${result.name} was assigned to you.`, titleAr: "تم تعيين فرصة لك", messageAr: `تم تعيين ${result.name} لك.`, entityType: "OPPORTUNITY", entityId: result.id, link: `/opportunities/${result.id}` });
+  }
+  return result;
 }
 
-export async function updateOpportunity(id: string, input: UpdateOpportunityInput) {
-  const existing = await prisma.opportunity.findUnique({ where: { id } });
+export async function updateOpportunity(id: string, input: UpdateOpportunityInput, actor: AuthUser) {
+  const existing = await prisma.opportunity.findUnique({ where: { id }, include: { owner: { select: { id: true, name: true } } } });
   if (!existing) {
     throw notFound("Opportunity not found.");
   }
+  assertOwnerUpdateAllowed(actor, existing.ownerId, input.ownerId);
+  if (input.ownerId !== undefined) await assertActiveOwner(input.ownerId);
 
   const companyId = input.companyId ?? existing.companyId;
   if (companyId !== existing.companyId) {
@@ -341,14 +360,29 @@ export async function updateOpportunity(id: string, input: UpdateOpportunityInpu
     },
   });
 
-  return getOpportunity(id);
+  const result = await getOpportunity(id);
+  const changes = conciseChanges(
+    { ...existing, owner: existing.owner?.name ?? null },
+    { ...result, owner: result.owner?.name ?? null },
+    ["companyId", "name", "stage", "primaryContactId", "summary", "confirmedProblem", "businessImpact", "proposedSolution", "estimatedValue", "probability", "source", "owner", "expectedCloseDate", "outcomeNotes", "lostReason"],
+  );
+  const ownerChanged = existing.ownerId !== (result.owner?.id ?? null);
+  await writeAuditLog({ actorUserId: actor.id, action: ownerChanged ? "OPPORTUNITY_OWNER_CHANGED" : existing.stage !== result.stage ? "OPPORTUNITY_STAGE_CHANGED" : "OPPORTUNITY_UPDATED", entityType: "OPPORTUNITY", entityId: id, entityLabel: result.name, changes });
+  if (ownerChanged && result.owner && result.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: result.owner.id, type: "OPPORTUNITY_ASSIGNED", title: "Opportunity assigned to you", message: `${result.name} was assigned to you.`, titleAr: "تم تعيين فرصة لك", messageAr: `تم تعيين ${result.name} لك.`, entityType: "OPPORTUNITY", entityId: id, link: `/opportunities/${id}` });
+  }
+  if (ownerChanged && existing.owner && existing.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: existing.owner.id, type: "OPPORTUNITY_TRANSFERRED", title: "Opportunity ownership changed", message: `${result.name} was reassigned.`, titleAr: "تغيّرت ملكية الفرصة", messageAr: `تمت إعادة تعيين ${result.name}.`, entityType: "OPPORTUNITY", entityId: id, link: `/opportunities/${id}` });
+  }
+  return result;
 }
 
-export async function deleteOpportunity(id: string) {
+export async function deleteOpportunity(id: string, actorUserId: string) {
   const existing = await prisma.opportunity.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Opportunity not found.");
   }
   await prisma.opportunity.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "OPPORTUNITY_DELETED", entityType: "OPPORTUNITY", entityId: id, entityLabel: existing.name });
   return { ok: true };
 }

@@ -57,7 +57,7 @@ contactsRouter.post(
   requirePermission(PERMISSION_KEYS.CONTACTS_CREATE),
   validate(createContactSchema),
   async (req, res) => {
-    const contact = await createContact(req.body);
+    const contact = await createContact(req.body, req.authUser!.id);
     res.status(201).json({ data: { contact } });
   },
 );
@@ -67,7 +67,7 @@ contactsRouter.patch(
   requirePermission(PERMISSION_KEYS.CONTACTS_UPDATE),
   validate(updateContactSchema),
   async (req, res) => {
-    const contact = await updateContact(String(req.params.id), req.body);
+    const contact = await updateContact(String(req.params.id), req.body, req.authUser!.id);
     res.json({ data: { contact } });
   },
 );
@@ -76,7 +76,7 @@ contactsRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.CONTACTS_DELETE),
   async (req, res) => {
-    await deleteContact(String(req.params.id));
+    await deleteContact(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );

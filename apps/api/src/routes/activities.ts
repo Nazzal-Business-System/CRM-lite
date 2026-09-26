@@ -43,7 +43,7 @@ activitiesRouter.post(
     ) {
       throw forbidden("You do not have permission to create follow-ups.");
     }
-    const activity = await createActivity(req.authUser!.id, req.body);
+    const activity = await createActivity(req.authUser!, req.body);
     res.status(201).json({ data: { activity } });
   },
 );
@@ -53,7 +53,7 @@ activitiesRouter.patch(
   requirePermission(PERMISSION_KEYS.ACTIVITIES_UPDATE),
   validate(updateActivitySchema),
   async (req, res) => {
-    const activity = await updateActivity(String(req.params.id), req.body);
+    const activity = await updateActivity(String(req.params.id), req.body, req.authUser!);
     res.json({ data: { activity } });
   },
 );
@@ -62,7 +62,7 @@ activitiesRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.ACTIVITIES_DELETE),
   async (req, res) => {
-    await deleteActivity(String(req.params.id));
+    await deleteActivity(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );

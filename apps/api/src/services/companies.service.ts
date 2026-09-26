@@ -9,11 +9,15 @@ import {
   type CompanySummary,
   type PaginatedResult,
   type UserRef,
+  type AuthUser,
 } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
 import { skipTake } from "../lib/crm";
 import { conflict, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
+import { createNotification } from "./notifications.service";
+import { assertOwnerUpdateAllowed, ownerForCreate } from "./ownership-policy";
 
 const ownerSelect = { id: true, name: true } as const;
 
@@ -28,8 +32,8 @@ async function assertOwner(ownerId: string | null | undefined): Promise<string |
     where: { id: ownerId },
     select: { id: true, isActive: true },
   });
-  if (!user) {
-    throw conflict("Selected owner was not found.");
+  if (!user?.isActive) {
+    throw conflict("Selected owner must be an active CRM user.");
   }
   return user.id;
 }
@@ -360,10 +364,11 @@ export async function getCompany(id: string): Promise<CompanyDetail> {
   };
 }
 
-export async function createCompany(input: CreateCompanyInput) {
+export async function createCompany(input: CreateCompanyInput, actor: AuthUser) {
   const nameNormalized = normalizeCompanyName(input.name);
   const websiteDomain = normalizeWebsiteDomain(input.website);
-  const ownerId = await assertOwner(input.ownerId);
+  const governedOwnerId = ownerForCreate(actor, input.ownerId);
+  const ownerId = await assertOwner(governedOwnerId);
   const qualification = qualificationFrom(input);
 
   await assertUniqueCompany(nameNormalized, websiteDomain);
@@ -388,11 +393,16 @@ export async function createCompany(input: CreateCompanyInput) {
     },
   });
 
-  return getCompany(company.id);
+  const result = await getCompany(company.id);
+  await writeAuditLog({ actorUserId: actor.id, action: "COMPANY_CREATED", entityType: "COMPANY", entityId: company.id, entityLabel: company.name, metadata: { ownerId: result.owner?.id ?? null } });
+  if (result.owner && result.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: result.owner.id, type: "COMPANY_ASSIGNED", title: "Company assigned to you", message: `${company.name} was assigned to you.`, titleAr: "تم تعيين شركة لك", messageAr: `تم تعيين ${company.name} لك.`, entityType: "COMPANY", entityId: company.id, link: `/companies/${company.id}` });
+  }
+  return result;
 }
 
-export async function updateCompany(id: string, input: UpdateCompanyInput) {
-  const existing = await prisma.company.findUnique({ where: { id } });
+export async function updateCompany(id: string, input: UpdateCompanyInput, actor: AuthUser) {
+  const existing = await prisma.company.findUnique({ where: { id }, include: { owner: { select: ownerSelect } } });
   if (!existing) {
     throw notFound("Company not found.");
   }
@@ -403,6 +413,7 @@ export async function updateCompany(id: string, input: UpdateCompanyInput) {
     input.website === undefined ? existing.website : input.website;
   const websiteDomain = normalizeWebsiteDomain(website);
   const ownerId = await assertOwner(input.ownerId);
+  assertOwnerUpdateAllowed(actor, existing.ownerId, ownerId);
 
   if (
     nameNormalized !== existing.nameNormalized ||
@@ -451,10 +462,23 @@ export async function updateCompany(id: string, input: UpdateCompanyInput) {
     },
   });
 
-  return getCompany(id);
+  const result = await getCompany(id);
+  const changes = conciseChanges(
+    { ...existing, owner: existing.owner?.name ?? null },
+    { ...result, owner: result.owner?.name ?? null },
+    ["name", "website", "sector", "companySize", "locations", "source", "companyFit", "problemPotential", "decisionMakerAccess", "priority", "owner", "generalNotes"],
+  );
+  await writeAuditLog({ actorUserId: actor.id, action: existing.ownerId !== (result.owner?.id ?? null) ? "COMPANY_OWNER_CHANGED" : "COMPANY_UPDATED", entityType: "COMPANY", entityId: id, entityLabel: result.name, changes });
+  if (result.owner && result.owner.id !== existing.ownerId && result.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: result.owner.id, type: "COMPANY_ASSIGNED", title: "Company assigned to you", message: `${result.name} was assigned to you.`, titleAr: "تم تعيين شركة لك", messageAr: `تم تعيين ${result.name} لك.`, entityType: "COMPANY", entityId: id, link: `/companies/${id}` });
+  }
+  if (existing.owner && existing.owner.id !== result.owner?.id && existing.owner.id !== actor.id) {
+    await createNotification({ recipientUserId: existing.owner.id, type: "COMPANY_TRANSFERRED", title: "Company ownership changed", message: `${result.name} was reassigned.`, titleAr: "تغيّرت ملكية الشركة", messageAr: `تمت إعادة تعيين ${result.name}.`, entityType: "COMPANY", entityId: id, link: `/companies/${id}` });
+  }
+  return result;
 }
 
-export async function deleteCompany(id: string) {
+export async function deleteCompany(id: string, actorUserId: string) {
   const company = await prisma.company.findUnique({
     where: { id },
     include: {
@@ -490,6 +514,7 @@ export async function deleteCompany(id: string) {
   }
 
   await prisma.company.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "COMPANY_DELETED", entityType: "COMPANY", entityId: id, entityLabel: company.name });
   return { ok: true };
 }
 

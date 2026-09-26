@@ -4,11 +4,15 @@ import type {
   CreateActivityInput,
   PaginatedResult,
   UpdateActivityInput,
+  AuthUser,
 } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
 import { skipTake, userRefSelect } from "../lib/crm";
-import { badRequest, notFound } from "../lib/errors";
+import { badRequest, forbidden, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
+import { createNotification } from "./notifications.service";
+import { ownerForCreate } from "./ownership-policy";
 
 function serializeActivity(row: {
   id: string;
@@ -129,14 +133,17 @@ export async function listActivities(
   };
 }
 
-export async function createActivity(userId: string, input: CreateActivityInput) {
+export async function createActivity(actor: AuthUser, input: CreateActivityInput) {
   await assertRelations(
     input.companyId,
     input.contactId,
     input.opportunityId,
   );
 
-  const ownerId = input.ownerId ?? userId;
+  if (input.ownerId && input.ownerId !== actor.id) {
+    throw forbidden("Activities can only be logged as the current user.");
+  }
+  const ownerId = actor.id;
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
 
   const row = await prisma.$transaction(async (tx) => {
@@ -154,19 +161,27 @@ export async function createActivity(userId: string, input: CreateActivityInput)
       include: activityInclude,
     });
 
+    let nextTask: { id: string; title: string; ownerId: string } | null = null;
     if (input.nextTask) {
-      await tx.task.create({
+      const nextOwnerId = ownerForCreate(actor, input.nextTask.ownerId ?? actor.id) ?? actor.id;
+      nextTask = await tx.task.create({
         data: {
           title: input.nextTask.title,
           description: input.nextTask.description ?? null,
           dueAt: new Date(input.nextTask.dueAt),
-          ownerId: input.nextTask.ownerId ?? ownerId,
+          ownerId: nextOwnerId,
           companyId: input.companyId,
           contactId: input.contactId ?? null,
           opportunityId: input.opportunityId ?? null,
-        },
+        }, select: { id: true, title: true, ownerId: true },
       });
+      await writeAuditLog({ actorUserId: actor.id, action: "TASK_CREATED", entityType: "TASK", entityId: nextTask.id, entityLabel: nextTask.title, metadata: { ownerId: nextTask.ownerId, createdFromActivityId: activity.id } }, tx);
+      if (nextTask.ownerId !== actor.id) {
+        await createNotification({ recipientUserId: nextTask.ownerId, type: "TASK_ASSIGNED", title: "Task assigned to you", message: `${nextTask.title} was assigned to you.`, titleAr: "تم تعيين مهمة لك", messageAr: `تم تعيين ${nextTask.title} لك.`, entityType: "TASK", entityId: nextTask.id, link: "/tasks" }, tx);
+      }
     }
+
+    await writeAuditLog({ actorUserId: actor.id, action: "ACTIVITY_CREATED", entityType: "ACTIVITY", entityId: activity.id, entityLabel: activity.summary, metadata: { companyId: activity.companyId, ownerId: activity.owner.id } }, tx);
 
     return activity;
   });
@@ -174,10 +189,13 @@ export async function createActivity(userId: string, input: CreateActivityInput)
   return serializeActivity(row);
 }
 
-export async function updateActivity(id: string, input: UpdateActivityInput) {
-  const existing = await prisma.activity.findUnique({ where: { id } });
+export async function updateActivity(id: string, input: UpdateActivityInput, actor: AuthUser) {
+  const existing = await prisma.activity.findUnique({ where: { id }, include: { owner: { select: userRefSelect } } });
   if (!existing) {
     throw notFound("Activity not found.");
+  }
+  if (input.ownerId !== undefined && input.ownerId !== existing.ownerId) {
+    throw forbidden("Activity ownership is attribution and cannot be reassigned.");
   }
 
   await assertRelations(
@@ -205,14 +223,24 @@ export async function updateActivity(id: string, input: UpdateActivityInput) {
     include: activityInclude,
   });
 
-  return serializeActivity(row);
+  const activity = serializeActivity(row);
+  await writeAuditLog({
+    actorUserId: actor.id,
+    action: "ACTIVITY_UPDATED",
+    entityType: "ACTIVITY",
+    entityId: id,
+    entityLabel: activity.summary,
+    changes: conciseChanges({ ...existing, owner: existing.owner.name }, { ...activity, owner: activity.owner.name }, ["companyId", "contactId", "opportunityId", "type", "occurredAt", "summary", "outcome", "owner"]),
+  });
+  return activity;
 }
 
-export async function deleteActivity(id: string) {
+export async function deleteActivity(id: string, actorUserId: string) {
   const existing = await prisma.activity.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Activity not found.");
   }
   await prisma.activity.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "ACTIVITY_DELETED", entityType: "ACTIVITY", entityId: id, entityLabel: existing.summary });
   return { ok: true };
 }

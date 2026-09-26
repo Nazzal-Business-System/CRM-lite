@@ -7,6 +7,7 @@ import { ar, enUS } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/provider";
 import { jordanDateTimeToUtc, jordanParts } from "@/lib/format";
@@ -53,6 +54,8 @@ export function DateTimePicker({
   disabled,
   id,
   className,
+  min,
+  max,
 }: {
   value: string | null | undefined;
   onChange: (value: string) => void;
@@ -61,12 +64,15 @@ export function DateTimePicker({
   disabled?: boolean;
   id?: string;
   className?: string;
+  min?: string;
+  max?: string;
 }) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseIsoDate(value), [value]);
   const dateFnsLocale = locale === "ar" ? ar : enUS;
-  const uses12Hour = locale === "en";
+  const minDate = useMemo(() => parseIsoDate(min), [min]);
+  const maxDate = useMemo(() => parseIsoDate(max), [max]);
 
   const [hour, setHour] = useState(() => selected?.getHours() ?? 9);
   const [minute, setMinute] = useState(() => selected?.getMinutes() ?? 0);
@@ -97,18 +103,13 @@ export function DateTimePicker({
   const display = selected
     ? format(
         selected,
-        includeTime ? (uses12Hour ? "PP p" : "PP HH:mm") : "PP",
+        includeTime ? "PP p" : "PP",
         { locale: dateFnsLocale },
       )
     : null;
 
-  const hourOptions = uses12Hour
-    ? Array.from({ length: 12 }, (_, index) => index + 1)
-    : Array.from({ length: 24 }, (_, index) => index);
-
-  const displayHour = uses12Hour
-    ? ((hour + 11) % 12) + 1
-    : hour;
+  const hourOptions = Array.from({ length: 12 }, (_, index) => index + 1);
+  const displayHour = ((hour + 11) % 12) + 1;
   const period = hour >= 12 ? "PM" : "AM";
 
   return (
@@ -155,19 +156,17 @@ export function DateTimePicker({
             onSelect={(date) => commitDate(date)}
             locale={dateFnsLocale}
             dir={locale === "ar" ? "rtl" : "ltr"}
+            disabled={[
+              ...(minDate ? [{ before: minDate }] : []),
+              ...(maxDate ? [{ after: maxDate }] : []),
+            ]}
           />
           {includeTime ? (
             <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2">
-              <select
-                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                value={displayHour}
-                aria-label={t("datePicker.hour")}
-                onChange={(event) => {
-                  const nextDisplay = Number(event.target.value);
-                  if (!uses12Hour) {
-                    commitTime(nextDisplay, minute);
-                    return;
-                  }
+              <Select
+                value={String(displayHour)}
+                onValueChange={(value) => {
+                  const nextDisplay = Number(value);
                   const nextHour =
                     period === "AM"
                       ? nextDisplay % 12
@@ -175,40 +174,49 @@ export function DateTimePicker({
                   commitTime(nextHour, minute);
                 }}
               >
+                <SelectTrigger className="h-8 w-[4.5rem]" aria-label={t("datePicker.hour")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-52 min-w-[4.5rem]">
                 {hourOptions.map((option) => (
-                  <option key={option} value={option}>
+                  <SelectItem key={option} value={String(option)}>
                     {pad(option)}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+                </SelectContent>
+              </Select>
               <span className="text-muted-foreground">:</span>
-              <select
-                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                value={minute}
-                aria-label={t("datePicker.minute")}
-                onChange={(event) => commitTime(hour, Number(event.target.value))}
+              <Select
+                value={String(minute)}
+                onValueChange={(value) => commitTime(hour, Number(value))}
               >
+                <SelectTrigger className="h-8 w-[4.5rem]" aria-label={t("datePicker.minute")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-52 min-w-[4.5rem]">
                 {Array.from({ length: 60 }, (_, index) => (
-                  <option key={index} value={index}>
+                  <SelectItem key={index} value={String(index)}>
                     {pad(index)}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-              {uses12Hour ? (
-                <select
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                  value={period}
-                  aria-label={t("datePicker.period")}
-                  onChange={(event) => {
-                    const nextPeriod = event.target.value as "AM" | "PM";
+                </SelectContent>
+              </Select>
+              <Select
+                value={period}
+                onValueChange={(value) => {
+                    const nextPeriod = value as "AM" | "PM";
                     const base = displayHour % 12;
                     commitTime(nextPeriod === "PM" ? base + 12 : base, minute);
-                  }}
-                >
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              ) : null}
+                }}
+              >
+                <SelectTrigger className="h-8 w-[4.75rem]" aria-label={t("datePicker.period")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="min-w-[4.75rem]">
+                  <SelectItem value="AM">AM</SelectItem>
+                  <SelectItem value="PM">PM</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           ) : null}
           <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-popover px-3 py-2">

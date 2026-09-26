@@ -70,7 +70,7 @@ companiesRouter.post(
   requirePermission(PERMISSION_KEYS.COMPANIES_CREATE),
   validate(createCompanySchema),
   async (req, res) => {
-    const company = await createCompany(req.body);
+    const company = await createCompany(req.body, req.authUser!);
     res.status(201).json({ data: { company } });
   },
 );
@@ -80,7 +80,7 @@ companiesRouter.patch(
   requirePermission(PERMISSION_KEYS.COMPANIES_UPDATE),
   validate(updateCompanySchema),
   async (req, res) => {
-    const company = await updateCompany(String(req.params.id), req.body);
+    const company = await updateCompany(String(req.params.id), req.body, req.authUser!);
     res.json({ data: { company } });
   },
 );
@@ -89,7 +89,7 @@ companiesRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.COMPANIES_DELETE),
   async (req, res) => {
-    await deleteCompany(String(req.params.id));
+    await deleteCompany(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );
@@ -149,7 +149,7 @@ researchMutationsRouter.patch(
   requirePermission(PERMISSION_KEYS.COMPANIES_UPDATE),
   validate(updateEvidenceSchema),
   async (req, res) => {
-    const evidence = await updateEvidence(String(req.params.id), req.body);
+    const evidence = await updateEvidence(String(req.params.id), req.body, req.authUser!.id);
     res.json({ data: { evidence } });
   },
 );
@@ -158,7 +158,7 @@ researchMutationsRouter.delete(
   "/evidence/:id",
   requirePermission(PERMISSION_KEYS.COMPANIES_UPDATE),
   async (req, res) => {
-    await deleteEvidence(String(req.params.id));
+    await deleteEvidence(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );
@@ -168,7 +168,7 @@ researchMutationsRouter.patch(
   requirePermission(PERMISSION_KEYS.COMPANIES_UPDATE),
   validate(updateHypothesisSchema),
   async (req, res) => {
-    const hypothesis = await updateHypothesis(String(req.params.id), req.body);
+    const hypothesis = await updateHypothesis(String(req.params.id), req.body, req.authUser!.id);
     res.json({ data: { hypothesis } });
   },
 );
@@ -177,7 +177,7 @@ researchMutationsRouter.delete(
   "/hypotheses/:id",
   requirePermission(PERMISSION_KEYS.COMPANIES_UPDATE),
   async (req, res) => {
-    await deleteHypothesis(String(req.params.id));
+    await deleteHypothesis(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );

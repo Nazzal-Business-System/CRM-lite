@@ -36,7 +36,7 @@ tasksRouter.post(
   requirePermission(PERMISSION_KEYS.TASKS_CREATE),
   validate(createTaskSchema),
   async (req, res) => {
-    const task = await createTask(req.body);
+    const task = await createTask(req.body, req.authUser!);
     res.status(201).json({ data: { task } });
   },
 );
@@ -46,7 +46,7 @@ tasksRouter.patch(
   requirePermission(PERMISSION_KEYS.TASKS_UPDATE),
   validate(updateTaskSchema),
   async (req, res) => {
-    const task = await updateTask(String(req.params.id), req.body);
+    const task = await updateTask(String(req.params.id), req.body, req.authUser!);
     res.json({ data: { task } });
   },
 );
@@ -55,7 +55,7 @@ tasksRouter.post(
   "/:id/complete",
   requirePermission(PERMISSION_KEYS.TASKS_UPDATE),
   async (req, res) => {
-    const task = await completeTask(String(req.params.id));
+    const task = await completeTask(String(req.params.id), req.authUser!);
     res.json({ data: { task } });
   },
 );
@@ -64,7 +64,7 @@ tasksRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.TASKS_DELETE),
   async (req, res) => {
-    await deleteTask(String(req.params.id));
+    await deleteTask(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );

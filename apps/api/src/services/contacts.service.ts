@@ -10,6 +10,7 @@ import { Prisma } from "../generated/prisma/client";
 import { skipTake } from "../lib/crm";
 import { conflict, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
 
 function serializeContact(row: {
   id: string;
@@ -169,7 +170,7 @@ export async function getContact(id: string): Promise<ContactDetail> {
   return serializeContact(row);
 }
 
-export async function createContact(input: CreateContactInput) {
+export async function createContact(input: CreateContactInput, actorUserId: string) {
   await requireCompany(input.companyId);
   await assertNotDuplicate(input.companyId, input.name, input.email ?? null);
 
@@ -190,10 +191,12 @@ export async function createContact(input: CreateContactInput) {
   });
 
   await syncPrimary(row.companyId, row.id, row.isPrimary);
-  return serializeContact(row);
+  const contact = serializeContact(row);
+  await writeAuditLog({ actorUserId, action: "CONTACT_CREATED", entityType: "CONTACT", entityId: contact.id, entityLabel: contact.name, metadata: { companyId: contact.companyId } });
+  return contact;
 }
 
-export async function updateContact(id: string, input: UpdateContactInput) {
+export async function updateContact(id: string, input: UpdateContactInput, actorUserId: string) {
   const existing = await prisma.contact.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Contact not found.");
@@ -228,10 +231,12 @@ export async function updateContact(id: string, input: UpdateContactInput) {
   });
 
   await syncPrimary(row.companyId, row.id, row.isPrimary);
-  return serializeContact(row);
+  const contact = serializeContact(row);
+  await writeAuditLog({ actorUserId, action: "CONTACT_UPDATED", entityType: "CONTACT", entityId: id, entityLabel: contact.name, changes: conciseChanges({ ...existing }, { ...contact }, ["companyId", "name", "jobTitle", "decisionRole", "email", "phone", "linkedInUrl", "preferredChannel", "notes", "isPrimary"]) });
+  return contact;
 }
 
-export async function deleteContact(id: string) {
+export async function deleteContact(id: string, actorUserId: string) {
   const existing = await prisma.contact.findUnique({
     where: { id },
     include: {
@@ -249,5 +254,6 @@ export async function deleteContact(id: string) {
   }
 
   await prisma.contact.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "CONTACT_DELETED", entityType: "CONTACT", entityId: id, entityLabel: existing.name, metadata: { companyId: existing.companyId } });
   return { ok: true };
 }

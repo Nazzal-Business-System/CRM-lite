@@ -12,6 +12,7 @@ import { UserMenu } from "@/components/layout/user-menu";
 import { titleForPath } from "@/lib/navigation";
 import { useI18n } from "@/i18n/provider";
 import { usePathname } from "next/navigation";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function TopBar() {
   const pathname = usePathname();
@@ -23,6 +24,12 @@ export function TopBar() {
       ? "nav.dashboard"
       : pathname.startsWith("/admin/recruitment")
         ? "nav.recruitment"
+        : pathname.startsWith("/admin/ownership-requests")
+          ? "nav.ownershipRequests"
+          : pathname.startsWith("/admin/audit-logs")
+            ? "nav.auditLogs"
+            : pathname.startsWith("/notifications")
+              ? "nav.notifications"
         : pathname.startsWith("/admin/users")
           ? "nav.users"
           : pathname.startsWith("/admin/roles")
@@ -60,6 +67,7 @@ export function TopBar() {
         </h1>
       </div>
       <div className="flex items-center gap-1">
+        <NotificationBell />
         <LanguageSwitcher />
         <ThemeToggle />
         <div className="md:hidden">

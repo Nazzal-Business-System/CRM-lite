@@ -43,6 +43,12 @@ export const PERMISSION_KEYS = {
   ROLES_CREATE: "roles.create",
   ROLES_UPDATE: "roles.update",
   ROLES_DELETE: "roles.delete",
+
+  AUDIT_LOGS_VIEW: "audit_logs.view",
+  OWNERSHIP_REQUESTS_CREATE: "ownership_requests.create",
+  OWNERSHIP_REQUESTS_VIEW: "ownership_requests.view",
+  OWNERSHIP_REQUESTS_MANAGE: "ownership_requests.manage",
+  OWNERSHIP_ASSIGN: "ownership.assign",
 } as const;
 
 export type PermissionKey =
@@ -59,6 +65,7 @@ export const PERMISSION_CATEGORIES = [
   "Recruitment",
   "Users",
   "Roles",
+  "Governance",
 ] as const;
 
 export type PermissionCategory = (typeof PERMISSION_CATEGORIES)[number];
@@ -281,6 +288,36 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
     category: "Roles",
     actionLabel: "Delete",
   },
+  {
+    key: PERMISSION_KEYS.AUDIT_LOGS_VIEW,
+    description: "View immutable CRM audit logs",
+    category: "Governance",
+    actionLabel: "View audit logs",
+  },
+  {
+    key: PERMISSION_KEYS.OWNERSHIP_REQUESTS_CREATE,
+    description: "Request ownership of assignable records",
+    category: "Governance",
+    actionLabel: "Request ownership",
+  },
+  {
+    key: PERMISSION_KEYS.OWNERSHIP_REQUESTS_VIEW,
+    description: "View ownership requests",
+    category: "Governance",
+    actionLabel: "View requests",
+  },
+  {
+    key: PERMISSION_KEYS.OWNERSHIP_REQUESTS_MANAGE,
+    description: "Approve or reject ownership requests",
+    category: "Governance",
+    actionLabel: "Manage requests",
+  },
+  {
+    key: PERMISSION_KEYS.OWNERSHIP_ASSIGN,
+    description: "Directly assign or reassign record ownership",
+    category: "Governance",
+    actionLabel: "Assign ownership",
+  },
 ];
 
 export const SYSTEM_ROLE_NAMES = {
@@ -321,6 +358,7 @@ export const SALES_DEFAULT_PERMISSIONS: readonly PermissionKey[] = [
   PERMISSION_KEYS.TASKS_UPDATE,
   PERMISSION_KEYS.IMPORTS_VIEW,
   PERMISSION_KEYS.IMPORTS_CREATE,
+  PERMISSION_KEYS.OWNERSHIP_REQUESTS_CREATE,
 ];
 
 export function isPermissionKey(value: string): value is PermissionKey {

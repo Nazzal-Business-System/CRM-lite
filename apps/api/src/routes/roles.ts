@@ -54,7 +54,7 @@ rolesRouter.post(
   requirePermission(PERMISSION_KEYS.ROLES_CREATE),
   validate(createRoleSchema),
   async (req, res) => {
-    const role = await createRole(req.body);
+    const role = await createRole(req.body, req.authUser!.id);
     res.status(201).json({ data: { role } });
   },
 );
@@ -64,7 +64,7 @@ rolesRouter.patch(
   requirePermission(PERMISSION_KEYS.ROLES_UPDATE),
   validate(updateRoleSchema),
   async (req, res) => {
-    const role = await updateRole(req.params.id as string, req.body);
+    const role = await updateRole(req.params.id as string, req.body, req.authUser!.id);
     res.json({ data: { role } });
   },
 );
@@ -73,7 +73,7 @@ rolesRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.ROLES_DELETE),
   async (req, res) => {
-    await deleteRole(req.params.id as string);
+    await deleteRole(req.params.id as string, req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );

@@ -33,7 +33,7 @@ usersRouter.post(
   requirePermission(PERMISSION_KEYS.USERS_CREATE),
   validate(createUserSchema),
   async (req, res) => {
-    const user = await createUser(req.body);
+    const user = await createUser(req.body, req.authUser!.id);
     res.status(201).json({ data: { user } });
   },
 );
@@ -43,7 +43,7 @@ usersRouter.patch(
   requirePermission(PERMISSION_KEYS.USERS_UPDATE),
   validate(updateUserSchema),
   async (req, res) => {
-    const user = await updateUser(String(req.params.id), req.body);
+    const user = await updateUser(String(req.params.id), req.body, req.authUser!.id);
     res.json({ data: { user } });
   },
 );
@@ -55,7 +55,7 @@ usersRouter.patch(
   async (req, res) => {
     const user = await updateUser(String(req.params.id), {
       isActive: req.body.isActive,
-    });
+    }, req.authUser!.id);
     res.json({ data: { user } });
   },
 );

@@ -1,0 +1,70 @@
+name: Production database backup
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+      timezone: "Asia/Amman"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Create PostgreSQL backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Create and validate custom-format dump
+        id: backup
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
+        run: |
+          set -Eeuo pipefail
+
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "::error::The NEON_BACKUP_DATABASE_URL repository secret is not configured."
+            exit 1
+          fi
+
+          timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+          backup_name="crm-postgres-${timestamp}.dump"
+          backup_dir="${RUNNER_TEMP}/crm-database-backup"
+          backup_file="${backup_dir}/${backup_name}"
+
+          mkdir -p "${backup_dir}"
+
+          docker run --rm \
+            -e DATABASE_URL \
+            -e BACKUP_NAME="${backup_name}" \
+            -v "${backup_dir}:/backup" \
+            postgres:18-bookworm \
+            sh -eu -c 'pg_dump --dbname="$DATABASE_URL" --format=custom --file="/backup/$BACKUP_NAME"'
+
+          if [[ ! -s "${backup_file}" ]]; then
+            echo "::error::pg_dump did not produce a non-empty backup file."
+            exit 1
+          fi
+
+          docker run --rm \
+            -v "${backup_dir}:/backup:ro" \
+            postgres:18-bookworm \
+            pg_restore --list "/backup/${backup_name}" > /dev/null
+
+          echo "backup_name=${backup_name}" >> "${GITHUB_OUTPUT}"
+          echo "backup_file=${backup_file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload private backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.backup.outputs.backup_name }}
+          path: ${{ steps.backup.outputs.backup_file }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

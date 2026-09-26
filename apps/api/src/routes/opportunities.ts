@@ -45,7 +45,7 @@ opportunitiesRouter.post(
   requirePermission(PERMISSION_KEYS.OPPORTUNITIES_CREATE),
   validate(createOpportunitySchema),
   async (req, res) => {
-    const opportunity = await createOpportunity(req.body);
+    const opportunity = await createOpportunity(req.body, req.authUser!);
     res.status(201).json({ data: { opportunity } });
   },
 );
@@ -55,7 +55,7 @@ opportunitiesRouter.patch(
   requirePermission(PERMISSION_KEYS.OPPORTUNITIES_UPDATE),
   validate(updateOpportunitySchema),
   async (req, res) => {
-    const opportunity = await updateOpportunity(String(req.params.id), req.body);
+    const opportunity = await updateOpportunity(String(req.params.id), req.body, req.authUser!);
     res.json({ data: { opportunity } });
   },
 );
@@ -64,7 +64,7 @@ opportunitiesRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.OPPORTUNITIES_DELETE),
   async (req, res) => {
-    await deleteOpportunity(String(req.params.id));
+    await deleteOpportunity(String(req.params.id), req.authUser!.id);
     res.json({ data: { ok: true } });
   },
 );

@@ -197,6 +197,28 @@ export type {
 } from "./crm-types";
 
 export {
+  OWNERSHIP_ENTITY_TYPES,
+  OWNERSHIP_REQUEST_STATUSES,
+  type AuditChange,
+  type AuditLogRecord,
+  type NotificationRecord,
+  type OwnershipEntityType,
+  type OwnershipRequestRecord,
+  type OwnershipRequestStatus,
+} from "./governance";
+
+export {
+  auditLogQuerySchema,
+  createOwnershipRequestSchema,
+  notificationQuerySchema,
+  ownershipRequestQuerySchema,
+  reviewOwnershipRequestSchema,
+  type AuditLogQuery,
+  type NotificationQuery,
+  type OwnershipRequestQuery,
+} from "./governance-schemas";
+
+export {
   RECRUITMENT_IN_PROCESS_STAGES,
   RECRUITMENT_ROLE_TYPES,
   RECRUITMENT_ROLE_TYPE_LABELS,

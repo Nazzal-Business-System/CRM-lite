@@ -108,7 +108,7 @@ importsRouter.post(
   requirePermission(PERMISSION_KEYS.IMPORTS_CREATE),
   validate(importCommitSchema),
   async (req, res) => {
-    const result = await commitImport(req.body.entity, req.body, req.authUser!.id);
+    const result = await commitImport(req.body.entity, req.body, req.authUser!);
     res.json({ data: { result } });
   },
 );

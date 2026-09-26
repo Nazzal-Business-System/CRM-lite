@@ -16,6 +16,9 @@ import { recruitmentRouter } from "./routes/recruitment";
 import { rolesRouter } from "./routes/roles";
 import { tasksRouter } from "./routes/tasks";
 import { usersRouter } from "./routes/users";
+import { auditLogsRouter } from "./routes/audit-logs";
+import { notificationsRouter } from "./routes/notifications";
+import { ownershipRequestsRouter } from "./routes/ownership-requests";
 import { prisma } from "./lib/prisma";
 
 export function createApp() {
@@ -81,6 +84,9 @@ export function createApp() {
   app.use("/api/tasks", tasksRouter);
   app.use("/api/imports", importsRouter);
   app.use("/api/recruitment", recruitmentRouter);
+  app.use("/api/audit-logs", auditLogsRouter);
+  app.use("/api/notifications", notificationsRouter);
+  app.use("/api/ownership-requests", ownershipRequestsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

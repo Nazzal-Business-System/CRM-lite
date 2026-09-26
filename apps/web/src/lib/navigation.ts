@@ -10,6 +10,8 @@ import {
   Shield,
   UserRoundSearch,
   Users,
+  ClipboardCheck,
+  ScrollText,
 } from "lucide-react";
 import { PERMISSION_KEYS, type PermissionKey } from "@nbs/shared";
 import type { LucideIcon } from "lucide-react";
@@ -104,6 +106,18 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: UserRoundSearch,
         permission: PERMISSION_KEYS.RECRUITMENT_VIEW,
       },
+      {
+        href: "/admin/ownership-requests",
+        label: "Ownership Requests",
+        icon: ClipboardCheck,
+        permission: PERMISSION_KEYS.OWNERSHIP_REQUESTS_VIEW,
+      },
+      {
+        href: "/admin/audit-logs",
+        label: "Audit Logs",
+        icon: ScrollText,
+        permission: PERMISSION_KEYS.AUDIT_LOGS_VIEW,
+      },
     ],
   },
 ];
@@ -120,6 +134,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/admin/users": "Users",
   "/admin/roles": "Roles & Permissions",
   "/admin/recruitment": "Sales Recruitment",
+  "/admin/ownership-requests": "Ownership Requests",
+  "/admin/audit-logs": "Audit Logs",
+  "/notifications": "Notifications",
 };
 
 export function visibleNavSections(permissions: readonly string[]): NavSection[] {

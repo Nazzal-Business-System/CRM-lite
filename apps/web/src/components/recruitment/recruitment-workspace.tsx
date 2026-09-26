@@ -320,10 +320,20 @@ export function RecruitmentWorkspace() {
       >
         {(data) => (
           <>
-            <Surface className="overflow-hidden">
-              <Table>
+            <Surface className="min-w-0 overflow-hidden">
+              <Table className="w-full min-w-[75rem] table-fixed">
+                <colgroup>
+                  <col className="w-[12.5rem]" />
+                  <col className="w-[9.5rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[12.5rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[5.5rem]" />
+                </colgroup>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="[&_th]:whitespace-nowrap">
                     <TableHead>{t("recruitment.candidate")}</TableHead>
                     <TableHead>{t("recruitment.roleType")}</TableHead>
                     <TableHead>{t("recruitment.stage")}</TableHead>
@@ -338,15 +348,15 @@ export function RecruitmentWorkspace() {
                   {data.items.map((candidate) => (
                     <TableRow key={candidate.id}>
                       <TableCell>
-                        <div className="font-medium">{candidate.fullName}</div>
-                        <div className="text-[13px] text-muted-foreground" dir="ltr">
+                        <div className="truncate font-medium" title={candidate.fullName}>{candidate.fullName}</div>
+                        <div className="truncate text-[13px] text-muted-foreground" dir="ltr" title={candidate.email || candidate.phone || undefined}>
                           {candidate.email || candidate.phone || "—"}
                         </div>
                       </TableCell>
                       <TableCell>{t(`recruitment.roleTypes.${candidate.roleType}`)}</TableCell>
                       <TableCell>{t(`recruitment.stages.${candidate.stage}`)}</TableCell>
-                      <TableCell>{candidate.source}</TableCell>
-                      <TableCell>{candidate.nextAction || t("common.none")}</TableCell>
+                      <TableCell className="truncate" title={candidate.source}>{candidate.source}</TableCell>
+                      <TableCell className="truncate" title={candidate.nextAction || undefined}>{candidate.nextAction || t("common.none")}</TableCell>
                       <TableCell>
                         {candidate.nextActionDate
                           ? formatDate(candidate.nextActionDate)

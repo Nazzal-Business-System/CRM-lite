@@ -13,6 +13,7 @@ import type { Prisma } from "../generated/prisma/client";
 import { skipTake } from "../lib/crm";
 import { notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
 
 function serialize(
   row: {
@@ -173,12 +174,15 @@ export async function createRecruitmentCandidate(
     },
     include: { createdBy: { select: { id: true, name: true, email: true } } },
   });
-  return serialize(row, true) as RecruitmentCandidateDetail;
+  const result = serialize(row, true) as RecruitmentCandidateDetail;
+  await writeAuditLog({ actorUserId: userId, action: "RECRUITMENT_CANDIDATE_CREATED", entityType: "RECRUITMENT_CANDIDATE", entityId: result.id, entityLabel: result.fullName, metadata: { stage: result.stage } });
+  return result;
 }
 
 export async function updateRecruitmentCandidate(
   id: string,
   input: UpdateRecruitmentCandidateInput,
+  actorUserId: string,
 ): Promise<RecruitmentCandidateDetail> {
   const existing = await prisma.recruitmentCandidate.findUnique({ where: { id } });
   if (!existing) {
@@ -217,14 +221,17 @@ export async function updateRecruitmentCandidate(
     },
     include: { createdBy: { select: { id: true, name: true, email: true } } },
   });
-  return serialize(row, true) as RecruitmentCandidateDetail;
+  const result = serialize(row, true) as RecruitmentCandidateDetail;
+  await writeAuditLog({ actorUserId, action: existing.stage !== result.stage ? "RECRUITMENT_STAGE_CHANGED" : "RECRUITMENT_CANDIDATE_UPDATED", entityType: "RECRUITMENT_CANDIDATE", entityId: id, entityLabel: result.fullName, changes: conciseChanges({ ...existing }, { ...result }, ["fullName", "email", "phone", "linkedInUrl", "location", "source", "roleType", "stage", "experienceSummary", "notes", "nextAction", "nextActionDate", "compensationNotes", "rejectionReason"]) });
+  return result;
 }
 
-export async function deleteRecruitmentCandidate(id: string) {
+export async function deleteRecruitmentCandidate(id: string, actorUserId: string) {
   const existing = await prisma.recruitmentCandidate.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Candidate not found.");
   }
   await prisma.recruitmentCandidate.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "RECRUITMENT_CANDIDATE_DELETED", entityType: "RECRUITMENT_CANDIDATE", entityId: id, entityLabel: existing.fullName });
   return { ok: true };
 }

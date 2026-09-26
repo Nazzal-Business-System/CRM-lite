@@ -11,6 +11,7 @@ import { Prisma } from "../generated/prisma/client";
 import { skipTake, userRefSelect } from "../lib/crm";
 import { notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
+import { conciseChanges, writeAuditLog } from "./audit.service";
 
 function serializeEvidence(
   row: {
@@ -107,10 +108,12 @@ export async function createEvidence(
     },
     include: { createdBy: { select: userRefSelect } },
   });
-  return serializeEvidence(row);
+  const evidence = serializeEvidence(row);
+  await writeAuditLog({ actorUserId: userId, action: "RESEARCH_EVIDENCE_CREATED", entityType: "RESEARCH_EVIDENCE", entityId: evidence.id, entityLabel: evidence.title, metadata: { companyId } });
+  return evidence;
 }
 
-export async function updateEvidence(id: string, input: UpdateEvidenceInput) {
+export async function updateEvidence(id: string, input: UpdateEvidenceInput, actorUserId: string) {
   const existing = await prisma.researchEvidence.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Evidence not found.");
@@ -130,15 +133,18 @@ export async function updateEvidence(id: string, input: UpdateEvidenceInput) {
     },
     include: { createdBy: { select: userRefSelect } },
   });
-  return serializeEvidence(row);
+  const evidence = serializeEvidence(row);
+  await writeAuditLog({ actorUserId, action: "RESEARCH_EVIDENCE_UPDATED", entityType: "RESEARCH_EVIDENCE", entityId: id, entityLabel: evidence.title, changes: conciseChanges({ ...existing }, { ...evidence }, ["title", "details", "category", "sourceUrl", "sourceName", "observedAt"]) });
+  return evidence;
 }
 
-export async function deleteEvidence(id: string) {
+export async function deleteEvidence(id: string, actorUserId: string) {
   const existing = await prisma.researchEvidence.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Evidence not found.");
   }
   await prisma.researchEvidence.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "RESEARCH_EVIDENCE_DELETED", entityType: "RESEARCH_EVIDENCE", entityId: id, entityLabel: existing.title, metadata: { companyId: existing.companyId } });
   return { ok: true };
 }
 
@@ -168,10 +174,12 @@ export async function createHypothesis(
     },
     include: { createdBy: { select: userRefSelect } },
   });
-  return serializeHypothesis(row);
+  const hypothesis = serializeHypothesis(row);
+  await writeAuditLog({ actorUserId: userId, action: "HYPOTHESIS_CREATED", entityType: "HYPOTHESIS", entityId: hypothesis.id, entityLabel: hypothesis.statement, metadata: { companyId } });
+  return hypothesis;
 }
 
-export async function updateHypothesis(id: string, input: UpdateHypothesisInput) {
+export async function updateHypothesis(id: string, input: UpdateHypothesisInput, actorUserId: string) {
   const existing = await prisma.hypothesis.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Hypothesis not found.");
@@ -187,15 +195,18 @@ export async function updateHypothesis(id: string, input: UpdateHypothesisInput)
     },
     include: { createdBy: { select: userRefSelect } },
   });
-  return serializeHypothesis(row);
+  const hypothesis = serializeHypothesis(row);
+  await writeAuditLog({ actorUserId, action: existing.status !== hypothesis.status ? "HYPOTHESIS_STATUS_CHANGED" : "HYPOTHESIS_UPDATED", entityType: "HYPOTHESIS", entityId: id, entityLabel: hypothesis.statement, changes: conciseChanges({ ...existing }, { ...hypothesis }, ["statement", "status", "supportingContext"]) });
+  return hypothesis;
 }
 
-export async function deleteHypothesis(id: string) {
+export async function deleteHypothesis(id: string, actorUserId: string) {
   const existing = await prisma.hypothesis.findUnique({ where: { id } });
   if (!existing) {
     throw notFound("Hypothesis not found.");
   }
   await prisma.hypothesis.delete({ where: { id } });
+  await writeAuditLog({ actorUserId, action: "HYPOTHESIS_DELETED", entityType: "HYPOTHESIS", entityId: id, entityLabel: existing.statement, metadata: { companyId: existing.companyId } });
   return { ok: true };
 }
 

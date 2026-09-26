@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_Arabic } from "next/font/google";
 import type { ReactNode } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
 
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body className="min-h-full font-sans antialiased">
         <AppProviders>{children}</AppProviders>
+        <Analytics />
       </body>
     </html>
   );

@@ -27,6 +27,9 @@ import {
   type ImportPreviewRow,
   type ImportResult,
   type PreferredChannel,
+  type AuthUser,
+  hasPermission,
+  PERMISSION_KEYS,
 } from "@nbs/shared";
 import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
@@ -34,6 +37,8 @@ import { badRequest } from "../lib/errors";
 import { logger } from "../lib/logger";
 import { rowsFromSpreadsheet } from "../lib/spreadsheet";
 import { findCompanyDuplicates } from "./companies.service";
+import { writeAuditLog } from "./audit.service";
+import { createNotification } from "./notifications.service";
 
 function cell(values: Record<string, string | null>, header: string): string {
   const raw = values[header];
@@ -358,8 +363,9 @@ export async function parseImportFile(
 export async function commitImport(
   entity: ImportEntity,
   input: ImportCommitInput,
-  userId: string,
+  actor: AuthUser,
 ): Promise<ImportResult> {
+  const userId = actor.id;
   const result: ImportResult = {
     entity,
     total: input.rows.length,
@@ -427,6 +433,13 @@ export async function commitImport(
         userId,
         messages,
       );
+      if (
+        ownerId &&
+        ownerId !== userId &&
+        !hasPermission(actor.permissions, PERMISSION_KEYS.OWNERSHIP_ASSIGN)
+      ) {
+        messages.push("Owner Email: must be your own account");
+      }
 
       if (messages.some(isBlockingMessage) || !ownerId) {
         result.invalid += 1;
@@ -492,6 +505,11 @@ export async function commitImport(
           });
         }
 
+        await writeAuditLog({ actorUserId: userId, action: "COMPANY_CREATED", entityType: "COMPANY", entityId: company.id, entityLabel: company.name, metadata: { ownerId, source: "IMPORT", importRow: row.rowNumber } });
+        if (ownerId !== userId) {
+          await createNotification({ recipientUserId: ownerId, type: "COMPANY_ASSIGNED", title: "Company assigned to you", message: `${company.name} was assigned to you through an import.`, titleAr: "تم تعيين شركة لك", messageAr: `تم تعيين ${company.name} لك من خلال الاستيراد.`, entityType: "COMPANY", entityId: company.id, link: `/companies/${company.id}` });
+        }
+
         result.created += 1;
       } catch (error) {
         logger.error({ err: error, rowNumber: row.rowNumber }, "Import company row failed");
@@ -502,6 +520,7 @@ export async function commitImport(
         });
       }
     }
+    await writeAuditLog({ actorUserId: userId, action: result.failed > 0 ? "IMPORT_COMPLETED_WITH_ERRORS" : "IMPORT_COMPLETED", entityType: "IMPORT", entityLabel: "Companies import", metadata: { ...result, errors: result.errors.slice(0, 20) } });
     return result;
   }
 
@@ -569,7 +588,7 @@ export async function commitImport(
     }
 
     try {
-      await prisma.contact.create({
+      const contact = await prisma.contact.create({
         data: {
           companyId,
           name,
@@ -583,6 +602,7 @@ export async function commitImport(
           isPrimary: truthy(cell(row.values, "Primary")),
         },
       });
+      await writeAuditLog({ actorUserId: userId, action: "CONTACT_CREATED", entityType: "CONTACT", entityId: contact.id, entityLabel: contact.name, metadata: { companyId, source: "IMPORT", importRow: row.rowNumber } });
       result.created += 1;
     } catch {
       result.failed += 1;
@@ -593,6 +613,7 @@ export async function commitImport(
     }
   }
 
+  await writeAuditLog({ actorUserId: userId, action: result.failed > 0 ? "IMPORT_COMPLETED_WITH_ERRORS" : "IMPORT_COMPLETED", entityType: "IMPORT", entityLabel: "Contacts import", metadata: { ...result, errors: result.errors.slice(0, 20) } });
   return result;
 }
 

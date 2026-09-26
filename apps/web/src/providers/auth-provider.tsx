@@ -63,8 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutMutation = useMutation({
     mutationFn: () => api.post<{ ok: boolean }>("/auth/logout"),
     onSettled: async () => {
-      queryClient.setQueryData(["auth", "me"], null);
       queryClient.clear();
+      queryClient.setQueryData(["auth", "me"], null);
       router.replace("/login");
     },
   });
@@ -80,7 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    await logoutMutation.mutateAsync();
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // onSettled always removes cached identity and returns to login. The API
+      // normally clears the cookie even if its audit write is unavailable.
+    }
   }, [logoutMutation]);
 
   const value = useMemo<AuthContextValue>(

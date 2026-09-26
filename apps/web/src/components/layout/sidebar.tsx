@@ -26,6 +26,8 @@ const NAV_LABEL_KEYS: Record<string, string> = {
   "/admin/users": "nav.users",
   "/admin/roles": "nav.roles",
   "/admin/recruitment": "nav.recruitment",
+  "/admin/ownership-requests": "nav.ownershipRequests",
+  "/admin/audit-logs": "nav.auditLogs",
 };
 
 function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {

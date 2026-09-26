@@ -15,6 +15,7 @@ import {
   isProtectedAdminRole,
   loadPermissionIds,
 } from "./rbac.service";
+import { conciseChanges, writeAuditLog } from "./audit.service";
 
 function toRoleSummary(role: {
   id: string;
@@ -81,7 +82,7 @@ export async function listRoleOptions() {
   });
 }
 
-export async function createRole(input: CreateRoleInput): Promise<RoleSummary> {
+export async function createRole(input: CreateRoleInput, actorUserId: string): Promise<RoleSummary> {
   const permissionIds = await assertKnownPermissionKeys(input.permissionKeys);
 
   try {
@@ -97,7 +98,9 @@ export async function createRole(input: CreateRoleInput): Promise<RoleSummary> {
       include: roleInclude,
     });
 
-    return toRoleSummary(role);
+    const result = toRoleSummary(role);
+    await writeAuditLog({ actorUserId, action: "ROLE_CREATED", entityType: "ROLE", entityId: role.id, entityLabel: role.name, metadata: { permissionKeys: result.permissionKeys } });
+    return result;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -112,6 +115,7 @@ export async function createRole(input: CreateRoleInput): Promise<RoleSummary> {
 export async function updateRole(
   roleId: string,
   input: UpdateRoleInput,
+  actorUserId: string,
 ): Promise<RoleSummary> {
   const existing = await prisma.role.findUnique({
     where: { id: roleId },
@@ -181,7 +185,9 @@ export async function updateRole(
       });
     });
 
-    return toRoleSummary(role);
+    const result = toRoleSummary(role);
+    await writeAuditLog({ actorUserId, action: input.permissionKeys ? "ROLE_PERMISSIONS_CHANGED" : "ROLE_UPDATED", entityType: "ROLE", entityId: roleId, entityLabel: result.name, changes: conciseChanges({ name: existing.name, description: existing.description }, { name: result.name, description: result.description }, ["name", "description"]), metadata: input.permissionKeys ? { beforePermissionKeys: existing.permissions.map((entry) => entry.permission.key), afterPermissionKeys: result.permissionKeys } : null });
+    return result;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -193,7 +199,7 @@ export async function updateRole(
   }
 }
 
-export async function deleteRole(roleId: string): Promise<void> {
+export async function deleteRole(roleId: string, actorUserId: string): Promise<void> {
   const existing = await prisma.role.findUnique({
     where: { id: roleId },
     include: { users: { select: { id: true } } },
@@ -218,4 +224,5 @@ export async function deleteRole(roleId: string): Promise<void> {
   }
 
   await prisma.role.delete({ where: { id: roleId } });
+  await writeAuditLog({ actorUserId, action: "ROLE_DELETED", entityType: "ROLE", entityId: roleId, entityLabel: existing.name });
 }

@@ -246,10 +246,18 @@ export function UsersManager() {
       >
         {(data) => (
           <>
-            <div className="hidden overflow-hidden rounded-xl border border-border/80 bg-card md:block">
-              <Table>
+            <div className="hidden min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card md:block">
+              <Table className="w-full min-w-[68rem] table-fixed">
+                <colgroup>
+                  <col className="w-[11.25rem]" />
+                  <col className="w-[16.25rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[13.75rem]" />
+                </colgroup>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="[&_th]:whitespace-nowrap">
                     <TableHead>{t("users.name")}</TableHead>
                     <TableHead>{t("users.email")}</TableHead>
                     <TableHead>{t("users.role")}</TableHead>
@@ -261,9 +269,9 @@ export function UsersManager() {
                 <TableBody>
                   {data.users.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell dir="ltr">{user.email}</TableCell>
-                      <TableCell>{user.role.name}</TableCell>
+                      <TableCell className="truncate font-medium" title={user.name}>{user.name}</TableCell>
+                      <TableCell className="truncate" dir="ltr" title={user.email}>{user.email}</TableCell>
+                      <TableCell className="truncate" title={user.role.name}>{user.role.name}</TableCell>
                       <TableCell>
                         <Badge variant={user.isActive ? "success" : "warning"}>
                           {user.isActive ? t("common.active") : t("common.inactive")}

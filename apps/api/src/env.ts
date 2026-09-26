@@ -9,7 +9,10 @@ const envSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(32, "JWT_SECRET must be at least 32 characters."),
-  JWT_EXPIRES_IN: z.string().default("8h"),
+  JWT_EXPIRES_IN: z
+    .string()
+    .regex(/^\d+[smhd]$/, "JWT_EXPIRES_IN must be a duration such as 7d or 12h.")
+    .default("7d"),
   CORS_ORIGINS: z.string().min(1, "CORS_ORIGINS is required."),
   COOKIE_NAME: z.string().min(1).default("nbs_crm_session"),
   COOKIE_SECURE: z.enum(["true", "false"]).optional(),

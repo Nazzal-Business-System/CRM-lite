@@ -10,7 +10,8 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CompanySelect, ContactSelect, EnumSelect, FormField, UserSelect } from "@/components/crm/selects";
+import { CompanySelect, ContactSelect, EnumSelect, FormField } from "@/components/crm/selects";
+import { OwnerControl } from "@/components/ownership/owner-control";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -207,7 +208,10 @@ export function OpportunityFormDialog({
             />
           </FormField>
           <FormField label={t("opportunities.owner")}>
-            <UserSelect
+            <OwnerControl
+              entityType="OPPORTUNITY"
+              entityId={opportunity?.id}
+              owner={opportunity?.owner ?? null}
               allowEmpty
               value={form.ownerId}
               onChange={(value) => setForm({ ...form, ownerId: value })}

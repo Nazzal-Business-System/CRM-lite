@@ -29,7 +29,7 @@ export function verifyAccessToken(token: string): string {
 export function expiryToMs(value: string): number {
   const match = /^(\d+)([smhd])$/.exec(value.trim());
   if (!match) {
-    return 8 * 60 * 60 * 1000;
+    throw new Error("Invalid JWT_EXPIRES_IN duration.");
   }
 
   const amount = Number(match[1]);
@@ -45,6 +45,6 @@ export function expiryToMs(value: string): number {
     case "d":
       return amount * 24 * 60 * 60 * 1000;
     default:
-      return 8 * 60 * 60 * 1000;
+      throw new Error("Invalid JWT_EXPIRES_IN duration unit.");
   }
 }

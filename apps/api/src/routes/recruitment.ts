@@ -73,6 +73,7 @@ recruitmentRouter.patch(
     const candidate = await updateRecruitmentCandidate(
       String(req.params.id),
       req.body,
+      req.authUser!.id,
     );
     res.json({ data: { candidate } });
   },
@@ -82,7 +83,7 @@ recruitmentRouter.delete(
   "/:id",
   requirePermission(PERMISSION_KEYS.RECRUITMENT_DELETE),
   async (req, res) => {
-    const result = await deleteRecruitmentCandidate(String(req.params.id));
+    const result = await deleteRecruitmentCandidate(String(req.params.id), req.authUser!.id);
     res.json({ data: result });
   },
 );

@@ -114,6 +114,18 @@ enum RecruitmentStage {
   REJECTED
 }
 
+enum OwnershipEntityType {
+  COMPANY
+  OPPORTUNITY
+  TASK
+}
+
+enum OwnershipRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -134,10 +146,80 @@ model User {
   ownedActivities             Activity[]
   ownedTasks                  Task[]
   createdRecruitmentCandidates RecruitmentCandidate[]
+  auditLogs                   AuditLog[]          @relation("AuditActor")
+  notifications               Notification[]
+  ownershipRequests           OwnershipRequest[] @relation("OwnershipRequester")
+  ownershipRequestsRequested  OwnershipRequest[] @relation("OwnershipRequestedOwner")
+  ownershipRequestsReviewed   OwnershipRequest[] @relation("OwnershipReviewer")
+  ownershipRequestsCurrent    OwnershipRequest[] @relation("OwnershipCurrentOwner")
 
   @@index([roleId])
   @@index([isActive])
   @@map("users")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String
+  actor        User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  action       String
+  entityType   String
+  entityId     String?
+  entityLabel  String?
+  metadata     Json?
+  changes      Json?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id              String    @id @default(cuid())
+  recipientUserId String
+  recipient       User      @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  type            String
+  title           String
+  message         String
+  titleAr         String?
+  messageAr       String?
+  entityType      String?
+  entityId        String?
+  link            String?
+  readAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([recipientUserId, createdAt])
+  @@index([recipientUserId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model OwnershipRequest {
+  id               String                 @id @default(cuid())
+  entityType       OwnershipEntityType
+  entityId         String
+  entityLabel      String
+  requesterUserId  String
+  requester        User                   @relation("OwnershipRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  currentOwnerId   String?
+  currentOwner     User?                  @relation("OwnershipCurrentOwner", fields: [currentOwnerId], references: [id], onDelete: SetNull)
+  requestedOwnerId String
+  requestedOwner   User                   @relation("OwnershipRequestedOwner", fields: [requestedOwnerId], references: [id], onDelete: Restrict)
+  status           OwnershipRequestStatus @default(PENDING)
+  reviewedByUserId String?
+  reviewedBy       User?                  @relation("OwnershipReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([requesterUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@map("ownership_requests")
 }
 
 model Role {
