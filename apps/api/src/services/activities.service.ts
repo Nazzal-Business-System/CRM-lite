@@ -184,7 +184,7 @@ export async function createActivity(actor: AuthUser, input: CreateActivityInput
     await writeAuditLog({ actorUserId: actor.id, action: "ACTIVITY_CREATED", entityType: "ACTIVITY", entityId: activity.id, entityLabel: activity.summary, metadata: { companyId: activity.companyId, ownerId: activity.owner.id } }, tx);
 
     return activity;
-  });
+  }, { isolationLevel: "Serializable" });
 
   return serializeActivity(row);
 }

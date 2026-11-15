@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { verifyPassword } from "../lib/password";
-import { signAccessToken } from "../lib/jwt";
+import { createLoginSession } from "./sessions.service";
 import { serializeAuthUser, userAccessInclude } from "../lib/serialize";
 import { unauthorized } from "../lib/errors";
 import { logger } from "../lib/logger";
@@ -12,7 +12,8 @@ const INVALID_CREDENTIALS = "Invalid email or password.";
 export async function loginWithPassword(
   email: string,
   password: string,
-): Promise<{ token: string; user: AuthUser }> {
+  userAgent?: string,
+): Promise<{ token: string; expiresAt: Date; user: AuthUser }> {
   const normalizedEmail = email.trim().toLowerCase();
 
   const user = await prisma.user.findUnique({
@@ -32,16 +33,13 @@ export async function loginWithPassword(
     throw unauthorized(INVALID_CREDENTIALS);
   }
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-    include: userAccessInclude,
-  });
+  const { user: updated, token, session } = await createLoginSession(user.id, user.passwordHash, userAgent);
 
   await writeAuditLog({ actorUserId: updated.id, action: "LOGIN_SUCCEEDED", entityType: "AUTH", entityId: updated.id, entityLabel: updated.name });
 
   return {
-    token: signAccessToken(updated.id),
+    token,
+    expiresAt: session.idleExpiresAt,
     user: serializeAuthUser(updated),
   };
 }

@@ -2,6 +2,9 @@ import { DEFAULT_API_PORT } from "@nbs/shared";
 import { z } from "zod";
 
 const envSchema = z.object({
+  // Staged by default: schema and explicit grants must be approved before cutover.
+  PRICING_MODE: z.enum(["legacy_fx", "price_books"]).default("legacy_fx"),
+  MARKET_ACCESS_MODE: z.enum(["enforced", "legacy"]).default("enforced"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(DEFAULT_API_PORT),
   HOST: z.string().min(1).default("0.0.0.0"),
@@ -14,6 +17,9 @@ const envSchema = z.object({
     .regex(/^\d+[smhd]$/, "JWT_EXPIRES_IN must be a duration such as 7d or 12h.")
     .default("7d"),
   CORS_ORIGINS: z.string().min(1, "CORS_ORIGINS is required."),
+  // Phase 1: all replicas learn both formats before opaque issuance is enabled.
+  SESSION_TOKEN_MODE: z.enum(["legacy", "opaque"]).default("legacy"),
+  ACCEPT_LEGACY_JWT: z.enum(["true", "false"]).default("true"),
   COOKIE_NAME: z.string().min(1).default("nbs_crm_session"),
   COOKIE_SECURE: z.enum(["true", "false"]).optional(),
   COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
@@ -51,4 +57,8 @@ export const env = {
 
 if (env.corsOrigins.includes("*")) {
   throw new Error("CORS_ORIGINS cannot include * when using credentialed cookies.");
+}
+
+if (env.SESSION_TOKEN_MODE === "legacy" && env.ACCEPT_LEGACY_JWT === "false") {
+  throw new Error("Opaque issuance is required before disabling legacy JWT acceptance.");
 }

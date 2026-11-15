@@ -1,3 +1,8 @@
+import { priceBookAccessRouter } from "./routes/price-book-access";
+import { demosRouter } from "./routes/demos";
+import { marketMembershipsRouter } from "./routes/market-memberships";
+import { pricingBodyError, pricingRouter } from "./routes/pricing";
+import { marketRequestContext } from "./lib/market-context";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import express from "express";
@@ -20,6 +25,7 @@ import { auditLogsRouter } from "./routes/audit-logs";
 import { notificationsRouter } from "./routes/notifications";
 import { ownershipRequestsRouter } from "./routes/ownership-requests";
 import { salesPerformanceRouter } from "./routes/sales-performance";
+import { mySessionsRouter, adminSessionsRouter } from "./routes/sessions";
 import { prisma } from "./lib/prisma";
 
 export function createApp() {
@@ -72,6 +78,14 @@ export function createApp() {
     }
   });
 
+  app.use(marketRequestContext);
+  app.use("/api/demos", demosRouter);
+  app.use("/api/pricing", pricingBodyError, pricingRouter);
+
+  app.use("/api/auth/sessions", mySessionsRouter);
+  app.use("/api/admin", adminSessionsRouter);
+  app.use("/api/admin", marketMembershipsRouter);
+  app.use("/api/admin", priceBookAccessRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/roles", rolesRouter);

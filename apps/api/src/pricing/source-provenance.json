@@ -1,0 +1,16 @@
+{
+  "source": "NBS-website/src/config/pricing-v2",
+  "capturedOn": "2026-11-08",
+  "sha256": {
+    "catalog.ts": "9419905ac77175ba7d1242d5adab0fc3f92cfd9c88a946485acb7e0426fc0a76",
+    "types.ts": "a112f74ddd215e3e2f4874005e450561e0e1c46584f9a186580d716c682e0731",
+    "calculate.ts": "35a10b0528fdb0e8b551632eddd7698cd00b81d4a4a66cdbf145cf546fc85280",
+    "verify-calculate.ts": "5b0abaef68c50d2490ddaca8c86348c2c5d06810211d72de761785ce2887d9c9"
+  },
+  "sha256Lf": {
+    "catalog.ts": "3f168c9fc4777e2940dbcc8e939b49711b19072c54cb9b26dfd92b0d11c4b56e",
+    "types.ts": "03161b66954be74fb03287d8722584df2835a9833cb8d70f66a60606b780e051",
+    "calculate.ts": "5524498bdc0059b39e52cd8bc9b979efa87cc262bae4321889e6309eb64aac11",
+    "verify-calculate.ts": "fb745ed00765d3e643a31cca9c7f6f51e52bb0fe4e63284308d66b635238d286"
+  }
+}

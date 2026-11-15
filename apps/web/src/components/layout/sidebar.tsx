@@ -1,7 +1,8 @@
 "use client";
 
+import { useId, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { SidebarBrand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -15,6 +16,9 @@ import { useSidebarStore } from "@/stores/sidebar-store";
 import { useNavigationStore } from "@/stores/navigation-store";
 
 const NAV_LABEL_KEYS: Record<string, string> = {
+  "/demos": "demos.title",
+  "/pricing": "pricing.title",
+  "/admin/sessions": "sessions.adminTitle",
   "/": "nav.dashboard",
   "/companies": "nav.companies",
   "/research": "nav.research",
@@ -23,7 +27,7 @@ const NAV_LABEL_KEYS: Record<string, string> = {
   "/activities": "nav.activities",
   "/tasks": "nav.tasks",
   "/imports": "nav.imports",
-  "/admin/users": "nav.users",
+  "/admin/users": "partners.title",
   "/admin/roles": "nav.roles",
   "/admin/recruitment": "nav.recruitment",
   "/admin/ownership-requests": "nav.ownershipRequests",
@@ -77,19 +81,14 @@ export function SidebarNav({
   const { user } = useAuth();
   const { t } = useI18n();
   const pendingHref = useNavigationStore((state) => state.pendingHref);
+  const sectionCollapsed = useSidebarStore(state => state.sectionCollapsed);
+  const toggleSection = useSidebarStore(state => state.toggleSection);
   const sections = visibleNavSections(user?.permissions ?? []);
 
   return (
     <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2 py-3">
       {sections.map((section) => (
-        <div key={section.id} className="space-y-1">
-          {!collapsed ? (
-            <p className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground">
-              {t(section.id === "workspace" ? "nav.workspace" : "nav.administration")}
-            </p>
-          ) : (
-            <div className="mx-auto mb-1 h-px w-6 bg-sidebar-border" />
-          )}
+        <SidebarSection key={section.id} label={t(section.id === "workspace" ? "nav.workspace" : "nav.administration")} collapsed={collapsed} expanded={!sectionCollapsed[section.id]} onToggle={()=>toggleSection(section.id)}>
           {section.items.map((item) => {
             const active =
               item.href === "/"
@@ -126,7 +125,7 @@ export function SidebarNav({
               </Tooltip>
             );
           })}
-        </div>
+        </SidebarSection>
       ))}
     </nav>
   );
@@ -167,4 +166,11 @@ export function DesktopSidebar() {
       </div>
     </aside>
   );
+}
+
+export function SidebarSection({label,collapsed,expanded,onToggle,children}:{label:string;collapsed:boolean;expanded:boolean;onToggle:()=>void;children:ReactNode}) {
+  const id=useId();
+  return <div className="space-y-1"><button type="button" aria-expanded={expanded} aria-controls={id} aria-label={label} title={label} onClick={onToggle} className={cn("flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-[11px] font-medium text-muted-foreground hover:bg-sidebar-accent focus-visible:outline-2 focus-visible:outline-ring",collapsed&&"justify-center px-0")}>
+    {!collapsed&&<span>{label}</span>}<ChevronDown aria-hidden="true" className={cn("size-3.5 shrink-0 transition-transform",!expanded&&"-rotate-90 rtl:rotate-90")}/>
+  </button><div id={id} hidden={!expanded}>{children}</div></div>;
 }

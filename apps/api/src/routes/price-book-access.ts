@@ -1,0 +1,10 @@
+import { Router } from "express";
+import { PERMISSION_KEYS, replacePriceBookAccessSchema } from "@nbs/shared";
+import { authenticate, requireAuth } from "../middleware/auth";
+import { requirePermission } from "../middleware/require-permission";
+import { validate } from "../middleware/validate";
+import { getUserPriceBookAccess, replaceUserPriceBookAccess } from "../services/price-book-access.service";
+export const priceBookAccessRouter = Router();
+priceBookAccessRouter.use(authenticate, requireAuth, requirePermission(PERMISSION_KEYS.PRICING_PRICEBOOKS_MANAGE));
+priceBookAccessRouter.get("/users/:id/price-books", async (req, res) => { res.set("Cache-Control", "no-store").json({ data: await getUserPriceBookAccess(String(req.params.id), req.authUser!) }); });
+priceBookAccessRouter.put("/users/:id/price-books", validate(replacePriceBookAccessSchema), async (req, res) => { res.set("Cache-Control", "no-store").json({ data: await replaceUserPriceBookAccess(String(req.params.id), req.body, req.authUser!) }); });

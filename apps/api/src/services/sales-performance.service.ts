@@ -8,9 +8,9 @@ import {
   type SalespersonPerformance,
   type SalespersonPerformanceDetail,
 } from "@nbs/shared";
-import { Prisma } from "../generated/prisma/client";
 import { decimalToString } from "../lib/crm";
 import { notFound } from "../lib/errors";
+import { marketUserOptionsWhere } from "../lib/market-access";
 import { prisma } from "../lib/prisma";
 import { CONTACT_ACTIVITY_TYPES, resolvePerformancePeriod, winRate } from "./sales-performance-metrics";
 
@@ -35,7 +35,7 @@ export async function getSalesPerformance(query: SalesPerformanceQuery): Promise
 
   const [users, activities, contactedPairs, completed, overdue, created, active, closed, assigned, lastActivities] = await Promise.all([
     prisma.user.findMany({
-      where: { isActive: true, role: { name: SYSTEM_ROLE_NAMES.SALES } },
+      where: { AND: [{ isActive: true, role: { name: SYSTEM_ROLE_NAMES.SALES } }, await marketUserOptionsWhere(prisma)] },
       select: { id: true, name: true }, orderBy: { name: "asc" },
     }),
     prisma.activity.groupBy({ by: ["ownerId"], where: { occurredAt }, _count: { _all: true } }),
@@ -116,7 +116,7 @@ export async function getSalesPerformance(query: SalesPerformanceQuery): Promise
 
 export async function getSalespersonPerformance(userId: string, query: SalesPerformanceQuery): Promise<SalespersonPerformanceDetail> {
   const user = await prisma.user.findFirst({
-    where: { id: userId, isActive: true, role: { name: SYSTEM_ROLE_NAMES.SALES } },
+    where: { AND: [{ id: userId, isActive: true, role: { name: SYSTEM_ROLE_NAMES.SALES } }, await marketUserOptionsWhere(prisma)] },
     select: { id: true, name: true },
   });
   if (!user) throw notFound("Active sales user not found.");
@@ -128,21 +128,24 @@ export async function getSalespersonPerformance(userId: string, query: SalesPerf
   const activityWhere = { ownerId: userId, occurredAt: { gte: range.from, lte: range.to } };
   const now = new Date();
 
-  const [breakdown, recentActivities, assignedCompanies, activeOpportunities, closedOpportunities, overdueFollowUps, trend] = await Promise.all([
+  const [breakdown, recentActivities, assignedCompanies, activeOpportunities, closedOpportunities, overdueFollowUps, trendRows] = await Promise.all([
     prisma.activity.groupBy({ by: ["type"], where: activityWhere, _count: { _all: true } }),
     prisma.activity.findMany({ where: activityWhere, select: { id: true, type: true, occurredAt: true, summary: true, outcome: true, company: { select: { id: true, name: true } } }, orderBy: { occurredAt: "desc" }, take: 12 }),
     prisma.company.findMany({ where: { ownerId: userId }, select: { id: true, name: true, sector: true, priority: true }, orderBy: { name: "asc" } }),
     prisma.opportunity.findMany({ where: { ownerId: userId, stage: { in: [...OPEN_OPPORTUNITY_STAGES] } }, select: { id: true, name: true, stage: true, estimatedValue: true, closedAt: true, company: { select: { id: true, name: true } } }, orderBy: { updatedAt: "desc" } }),
     prisma.opportunity.findMany({ where: { ownerId: userId, stage: { in: ["WON", "LOST"] }, closedAt: { gte: range.from, lte: range.to } }, select: { id: true, name: true, stage: true, estimatedValue: true, closedAt: true, company: { select: { id: true, name: true } } }, orderBy: { closedAt: "desc" } }),
     prisma.task.findMany({ where: { ownerId: userId, status: "OPEN", dueAt: { gte: range.from, lte: new Date(Math.min(range.to.getTime(), now.getTime() - 1)) } }, select: { id: true, title: true, dueAt: true, company: { select: { id: true, name: true } } }, orderBy: { dueAt: "asc" } }),
-    prisma.$queryRaw<Array<{ date: string; count: number }>>(Prisma.sql`
-      SELECT TO_CHAR(("occurredAt" AT TIME ZONE 'Asia/Amman')::date, 'YYYY-MM-DD') AS date,
-             COUNT(*)::int AS count
-      FROM activities
-      WHERE "ownerId" = ${userId} AND "occurredAt" >= ${range.from} AND "occurredAt" <= ${range.to}
-      GROUP BY 1 ORDER BY 1
-    `),
+    // Keep the trend on the same authorized Activity path as every other KPI.
+    prisma.activity.groupBy({ by: ["occurredAt"], where: activityWhere, _count: { _all: true } }),
   ]);
+
+  const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman", year: "numeric", month: "2-digit", day: "2-digit" });
+  const dailyCounts = new Map<string, number>();
+  for (const row of trendRows) {
+    const date = dayFormatter.format(row.occurredAt);
+    dailyCounts.set(date, (dailyCounts.get(date) ?? 0) + row._count._all);
+  }
+  const trend = [...dailyCounts].sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count }));
 
   const serializeOpportunity = (row: (typeof activeOpportunities)[number]) => ({ ...row, estimatedValue: decimalToString(row.estimatedValue), closedAt: row.closedAt?.toISOString() ?? null });
   return {

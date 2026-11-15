@@ -17,16 +17,21 @@ import { PageFrame, PageHeader, Surface } from "@/components/crm/primitives";
 import { Can } from "@/components/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ImportPreviewTable } from "./import-preview";
 import { useI18n } from "@/i18n/provider";
 import { api, apiDownload, ApiError } from "@/lib/api";
+import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
 export function ImportsWorkspace() {
   const { t } = useI18n();
+  const {user}=useAuth();
+  const [templateError,setTemplateError]=useState<string|null>(null);
+  const [templateBusy,setTemplateBusy]=useState(false);
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [entity, setEntity] = useState<ImportEntity>("COMPANIES");
+  const [lastResult,setLastResult]=useState<ImportResult|null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -44,7 +49,8 @@ export function ImportsWorkspace() {
   }
 
   const promptQuery = useQuery({
-    queryKey: ["import-prompt", entity],
+    queryKey: ["import-prompt", user?.id, user?.permissions.join(","), user?.marketCodes?.join(","), entity],
+    refetchOnWindowFocus:true,
     queryFn: () => api.get<{ prompt: string }>(`/imports/ai-prompt?entity=${entity}`),
   });
 
@@ -80,6 +86,7 @@ export function ImportsWorkspace() {
       });
     },
     onSuccess: async (data) => {
+      setLastResult(data.result);
       toast.success(
         data.result.entity === "CONTACTS"
           ? t("imports.contactsImported", { count: data.result.created })
@@ -102,15 +109,18 @@ export function ImportsWorkspace() {
   });
 
   function submitFile(file: File | undefined) {
-    if (!file) {
+    if (!file || commitMutation.isPending || parseMutation.isPending) {
       return;
     }
+    setLastResult(null);
     setSelectedFile(file);
     setParseError(null);
     parseMutation.mutate(file);
   }
 
   function switchEntity(next: ImportEntity) {
+    if(commitMutation.isPending||parseMutation.isPending)return;
+    setLastResult(null);
     setEntity(next);
     setPreview(null);
     setSelectedFile(null);
@@ -175,7 +185,7 @@ export function ImportsWorkspace() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,.xlsx,.xls"
+            accept=".csv,.xlsx"
             className="sr-only"
             onChange={(event) => {
               submitFile(event.target.files?.[0]);
@@ -186,31 +196,21 @@ export function ImportsWorkspace() {
       </Can>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          onClick={() =>
-            void apiDownload(
-              `/imports/template?entity=${entity}`,
-              entity === "CONTACTS"
-                ? "nbs-contacts-import.xlsx"
-                : "nbs-companies-import.xlsx",
-            )
-          }
-        >
-          <Download className="size-4" />
-          {t("imports.downloadTemplate")}
-        </Button>
+        {(["xlsx","csv"] as const).map(format=><Button key={format} variant="outline" disabled={templateBusy} onClick={()=>{setTemplateBusy(true);setTemplateError(null);void apiDownload(`/imports/template?entity=${entity}&format=${format}`,`nbs-${entity==="CONTACTS"?"contacts":"companies"}-import.${format}`).catch(error=>setTemplateError(errorText(error))).finally(()=>setTemplateBusy(false));}}><Download className="size-4"/>{t("imports.downloadTemplate")} · {format.toUpperCase()}</Button>)}
+        {templateError&&<p role="alert" className="text-sm text-destructive">{templateError}</p>}
         <p className="text-sm text-muted-foreground">
           {entity === "CONTACTS" ? t("imports.contactsGuide") : t("imports.companiesGuide")}
         </p>
       </div>
 
+      {lastResult&&<Surface className="space-y-3 p-4"><p role="status" className="text-sm">{t("imports.resultSummary",{created:lastResult.created,duplicates:lastResult.duplicates,invalid:lastResult.invalid,failed:lastResult.failed,skipped:lastResult.skipped})}</p>{lastResult.errors.length>0&&<ul className="space-y-2 text-sm" role="alert">{lastResult.errors.map((error,index)=><li key={index}>{t("imports.row")} {error.rowNumber}: {error.message}</li>)}</ul>}</Surface>}
       <details className="rounded-xl border border-border/80 bg-card">
         <summary className="cursor-pointer px-5 py-3 text-sm font-medium">
           {t("imports.generateWithAi")}
         </summary>
         <div className="space-y-3 border-t border-border px-5 py-4">
           <p className="text-sm text-muted-foreground">{t("imports.aiHelp")}</p>
+          {promptQuery.isError&&<div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p>{errorText(promptQuery.error)}</p><Button variant="outline" size="sm" onClick={()=>void promptQuery.refetch()}>{t("common.retry")}</Button></div>}
           <pre className="max-h-48 overflow-auto rounded-lg bg-muted p-3 text-xs leading-5 whitespace-pre-wrap">
             {promptQuery.data?.prompt ?? t("imports.loadingInstruction")}
           </pre>
@@ -255,7 +255,8 @@ export function ImportsWorkspace() {
           ) : null}
           {preview ? (
             <>
-              <div className="flex flex-wrap gap-2 text-sm">
+              <div className="flex flex-wrap gap-2 text-sm" aria-live="polite">
+                <Badge variant="secondary">{t("imports.selectedCount",{count:preview.rows.filter(row=>row.included).length})}</Badge>
                 <Badge variant="success">
                   {t("imports.readyCount", { count: preview.counts.ready })}
                 </Badge>
@@ -266,68 +267,7 @@ export function ImportsWorkspace() {
                   {t("imports.invalidCount", { count: preview.counts.invalid })}
                 </Badge>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-border/80">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                      <th className="p-3">{t("imports.include")}</th>
-                      <th className="p-3">{t("imports.row")}</th>
-                      <th className="p-3">{t("imports.status")}</th>
-                      <th className="p-3">{t("imports.name")}</th>
-                      <th className="p-3">{t("imports.fit")}</th>
-                      <th className="p-3">{t("imports.problem")}</th>
-                      <th className="p-3">{t("imports.access")}</th>
-                      <th className="p-3">{t("imports.companySize")}</th>
-                      <th className="p-3">{t("imports.source")}</th>
-                      <th className="p-3">{t("imports.notes")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.rows.map((row, index) => (
-                      <tr key={row.rowNumber} className="border-b border-border align-top">
-                        <td className="p-3">
-                          <Checkbox
-                            checked={row.included}
-                            disabled={row.status === "INVALID"}
-                            onCheckedChange={(checked) => {
-                              const next = structuredClone(preview);
-                              next.rows[index]!.included = Boolean(checked);
-                              setPreview(next);
-                            }}
-                          />
-                        </td>
-                        <td className="p-3 tabular-nums">{row.rowNumber}</td>
-                        <td className="p-3">{row.status}</td>
-                        <td className="p-3">
-                          {row.values["Company Name"] || row.values.Name || t("common.dash")}
-                        </td>
-                        <td className="p-3 tabular-nums text-muted-foreground">
-                          {row.values["Company Fit"] || t("common.blank")}
-                        </td>
-                        <td className="p-3 tabular-nums text-muted-foreground">
-                          {row.values["Problem Potential"] || t("common.blank")}
-                        </td>
-                        <td className="p-3 tabular-nums text-muted-foreground">
-                          {row.values["Decision-Maker Access"] || t("common.blank")}
-                        </td>
-                        <td className="p-3">{row.values["Company Size"] || t("common.dash")}</td>
-                        <td className="p-3">{row.values.Source || t("common.dash")}</td>
-                        <td className="p-3 text-muted-foreground">
-                          {row.messages.length > 0 ? (
-                            <ul className="space-y-1">
-                              {row.messages.map((message) => (
-                                <li key={message}>{message}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            t("common.dash")
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ImportPreviewTable key={preview.entity+":"+preview.filename} preview={preview} busy={commitMutation.isPending} onInclude={(index,included)=>{const next=structuredClone(preview);next.rows[index]!.included=included;setPreview(next);}}/>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"

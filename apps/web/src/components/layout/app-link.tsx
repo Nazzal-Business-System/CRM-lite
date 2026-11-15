@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 type AppLinkProps = LinkProps & {
   children: ReactNode;
   className?: string;
+  "aria-current"?: "page";
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 };
 

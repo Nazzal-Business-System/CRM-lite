@@ -105,7 +105,7 @@ export async function createOwnershipRequest(actor: AuthUser, entityType: Owners
         tx,
       );
       return serializeRequest(request);
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw conflict("An ownership request is already pending for this record.");

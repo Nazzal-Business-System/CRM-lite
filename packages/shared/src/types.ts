@@ -6,6 +6,10 @@ export interface PublicRole {
 }
 
 export interface AuthUser {
+  accountType?: "PARTNER" | "INTERNAL";
+  marketCodes?: string[];
+  defaultMarketCode?: string | null;
+  initialDisplayCurrency?: import("./markets").DisplayCurrency | null;
   id: string;
   name: string;
   email: string;

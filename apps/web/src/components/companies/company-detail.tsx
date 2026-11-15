@@ -51,6 +51,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/i18n/provider";
+import { countryName, marketName, marketCatalogOptions } from "@/lib/market-management";
+import { useAuth } from "@/providers/auth-provider";
 import { api, ApiError } from "@/lib/api";
 import { formatDate, formatDateTime, formatMoney, jordanDateKey } from "@/lib/format";
 import { navigateTo } from "@/lib/navigate";
@@ -78,7 +80,9 @@ export function CompanyDetailView() {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { user: viewer } = useAuth();
+  const markets = useQuery({ ...marketCatalogOptions(viewer?.id), enabled: Boolean(viewer) });
   const [editOpen, setEditOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [hypothesisOpen, setHypothesisOpen] = useState(false);
@@ -252,6 +256,8 @@ export function CompanyDetailView() {
             <Surface className="p-5">
               <h3 className="text-sm font-medium">{t("companies.identity")}</h3>
               <dl className="mt-4 space-y-3 text-sm">
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">{t("companies.countryCode")}</dt><dd className="text-end"><bdi>{countryName(company.countryCode, locale, t("markets.unassigned"))}</bdi></dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">{t("companies.salesMarket")}</dt><dd className="text-end"><bdi>{marketName(company.salesMarketCode, markets.data?.markets ?? [], locale, t("markets.unassigned"))}</bdi></dd></div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">{t("companies.source")}</dt>
                   <dd>{t(`enums.companySource.${company.source}`)}</dd>

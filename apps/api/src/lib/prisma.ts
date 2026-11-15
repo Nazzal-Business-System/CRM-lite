@@ -6,4 +6,6 @@ const adapter = new PrismaPg({
   connectionString: env.DATABASE_URL,
 });
 
-export const prisma = new PrismaClient({ adapter });
+import { protectMarketClient } from "./market-access";
+
+export const prisma = protectMarketClient(new PrismaClient({ adapter }));

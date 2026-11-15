@@ -1,7 +1,8 @@
-import type { AuthUser } from "@nbs/shared";
+import { marketDisplayCurrency, type AuthUser } from "@nbs/shared";
 import type { Permission, Role, RolePermission, User } from "../generated/prisma/client";
 
 type UserWithAccess = User & {
+  marketMemberships?: Array<{ marketCode: string }>;
   role: Role & {
     permissions: Array<RolePermission & { permission: Permission }>;
   };
@@ -17,6 +18,10 @@ export function permissionKeysOf(user: UserWithAccess): string[] {
 
 export function serializeAuthUser(user: UserWithAccess): AuthUser {
   return {
+    accountType: user.accountType ?? "INTERNAL",
+    marketCodes: (user.marketMemberships ?? []).map(item => item.marketCode),
+    defaultMarketCode: user.defaultMarketCode ?? null,
+    initialDisplayCurrency: marketDisplayCurrency(user.defaultMarketCode),
     id: user.id,
     name: user.name,
     email: user.email,
@@ -35,6 +40,7 @@ export function serializeAuthUser(user: UserWithAccess): AuthUser {
 }
 
 export const userAccessInclude = {
+  marketMemberships: { select: { marketCode: true } },
   role: {
     include: {
       permissions: {

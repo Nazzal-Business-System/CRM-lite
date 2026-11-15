@@ -1,4 +1,5 @@
 import {
+  importTemplateQuerySchema,
   importCommitSchema,
   importParseQuerySchema,
   PERMISSION_KEYS,
@@ -15,12 +16,13 @@ import { validate, parsedQuery } from "../middleware/validate";
 import { getDashboard } from "../services/dashboard.service";
 import {
   buildTemplateWorkbook,
-  COMPANY_AI_PROMPT,
-  CONTACT_AI_PROMPT,
+  buildImportPrompt,
+  buildTemplateCsv,
   commitImport,
   parseImportFile,
 } from "../services/imports.service";
 import { listResearch } from "../services/research.service";
+import { marketRequestContext } from "../lib/market-context";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -51,20 +53,21 @@ researchRouter.get(
 );
 
 export const importsRouter = Router();
-importsRouter.use(authenticate, requireAuth);
+importsRouter.use(authenticate, requireAuth, (_req,res,next)=>{res.set("Cache-Control","no-store");next();});
 
 importsRouter.get(
   "/template",
   requirePermission(PERMISSION_KEYS.IMPORTS_VIEW),
-  validate(importParseQuerySchema, "query"),
+  validate(importTemplateQuerySchema, "query"),
   async (req, res) => {
     const entity = parsedQuery<{ entity: ImportEntity }>(req).entity;
-    const buffer = await buildTemplateWorkbook(entity);
+    const {format} = parsedQuery<{entity: ImportEntity;format:"xlsx"|"csv"}>(req);
+    const buffer = format === "csv" ? buildTemplateCsv(entity) : await buildTemplateWorkbook(entity);
     const filename =
-      entity === "CONTACTS" ? "nbs-contacts-import.xlsx" : "nbs-companies-import.xlsx";
+      `nbs-${entity === "CONTACTS" ? "contacts" : "companies"}-import.${format}`;
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      format === "csv" ? "text/csv; charset=utf-8" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(buffer);
@@ -79,7 +82,7 @@ importsRouter.get(
     const entity = parsedQuery<{ entity: ImportEntity }>(req).entity;
     res.json({
       data: {
-        prompt: entity === "CONTACTS" ? CONTACT_AI_PROMPT : COMPANY_AI_PROMPT,
+        prompt: await buildImportPrompt(entity),
       },
     });
   },
@@ -89,11 +92,14 @@ importsRouter.post(
   "/parse",
   requirePermission(PERMISSION_KEYS.IMPORTS_CREATE),
   upload.single("file"),
+  // Multipart stream callbacks may resume outside the original AsyncLocalStorage scope.
+  // Restore this authenticated request's context before any scoped database operation.
+  marketRequestContext,
   async (req, res) => {
     if (!req.file) {
       throw badRequest("Choose a CSV or XLSX file to upload.");
     }
-    const entity = req.body?.entity === "CONTACTS" ? "CONTACTS" : "COMPANIES";
+    const {entity} = importParseQuerySchema.parse(req.body);
     const preview = await parseImportFile(
       entity,
       req.file.originalname,

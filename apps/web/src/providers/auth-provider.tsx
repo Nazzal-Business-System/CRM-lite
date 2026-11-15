@@ -11,7 +11,9 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { api, ApiError, isServiceUnavailable } from "@/lib/api";
+import { api } from "@/lib/api";
+import { authQueryOptions, logoutMutationOptions, clearCachedSession } from "@/lib/auth-query";
+import { useI18n } from "@/i18n/provider";
 import { navigateTo } from "@/lib/navigate";
 import { defaultAuthenticatedPath } from "@/lib/navigation";
 
@@ -21,6 +23,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  endSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -30,25 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
 
-  const meQuery = useQuery({
-    queryKey: ["auth", "me"],
-    queryFn: async () => {
-      try {
-        const data = await api.get<{ user: AuthUser }>("/auth/me");
-        return data.user;
-      } catch (error) {
-        if (
-          (error instanceof ApiError && error.status === 401) ||
-          isServiceUnavailable(error)
-        ) {
-          return null;
-        }
-        throw error;
-      }
-    },
-    retry: false,
-    staleTime: 60_000,
-  });
+  const meQuery = useQuery(authQueryOptions);
+  const { t } = useI18n();
 
   const loginMutation = useMutation({
     mutationFn: (input: { email: string; password: string }) =>
@@ -60,14 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: () => api.post<{ ok: boolean }>("/auth/logout"),
-    onSettled: async () => {
-      queryClient.clear();
-      queryClient.setQueryData(["auth", "me"], null);
-      router.replace("/login");
-    },
-  });
+  const logoutMutation = useMutation(logoutMutationOptions(queryClient, () => router.replace("/login")));
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -88,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [logoutMutation]);
 
+  const endSession = useCallback(() => clearCachedSession(queryClient, () => router.replace("/login")), [queryClient, router]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: meQuery.data ?? null,
@@ -95,21 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(meQuery.data),
       login,
       logout,
+      endSession,
     }),
-    [login, logout, meQuery.data, meQuery.isLoading],
+    [login, logout, endSession, meQuery.data, meQuery.isLoading],
   );
 
   useEffect(() => {
-    const onUnauthorized = () => {
-      queryClient.setQueryData(["auth", "me"], null);
-      if (pathname !== "/login") {
-        router.replace("/login");
-      }
+    const revalidate = () => {
+      void queryClient.invalidateQueries({ queryKey: authQueryOptions.queryKey }, { cancelRefetch: false });
     };
-
-    window.addEventListener("nbs:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("nbs:unauthorized", onUnauthorized);
-  }, [pathname, queryClient, router]);
+    window.addEventListener("nbs:auth-revalidate", revalidate);
+    return () => window.removeEventListener("nbs:auth-revalidate", revalidate);
+  }, [queryClient]);
 
   useEffect(() => {
     if (meQuery.isLoading) {
@@ -130,12 +108,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (!user) {
+    if (meQuery.data === null) {
       navigateTo(router, "/login", pathname, true);
     }
   }, [meQuery.data, meQuery.isLoading, pathname, router]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {meQuery.isError && (
+        <div role="alert" className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-3 border-b bg-background p-4 text-sm shadow-md">
+          <span>{t("auth.connectionError")}</span>
+          <button type="button" className="underline" disabled={meQuery.isFetching} onClick={() => {
+            void meQuery.refetch().then((result) => {
+              if (result.isSuccess) void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "auth" });
+            });
+          }}>{t("common.retry")}</button>
+        </div>
+      )}
+      {meQuery.isError && !meQuery.data ? <div className="min-h-svh bg-background" /> : children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

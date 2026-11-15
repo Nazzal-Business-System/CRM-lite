@@ -1,4 +1,7 @@
 import {
+  Monitor,
+  Calculator,
+  Play,
   Building2,
   Contact,
   Handshake,
@@ -8,7 +11,6 @@ import {
   NotebookPen,
   Search,
   Shield,
-  UserRoundSearch,
   Users,
   ClipboardCheck,
   ScrollText,
@@ -83,6 +85,8 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Import,
         permission: PERMISSION_KEYS.IMPORTS_VIEW,
       },
+      { href: "/pricing", label: "Pricing Estimator", icon: Calculator, permission: PERMISSION_KEYS.PRICING_VIEW },
+      { href: "/demos", label: "Live Demos", icon: Play, permission: PERMISSION_KEYS.DEMOS_VIEW },
     ],
   },
   {
@@ -90,8 +94,14 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Administration",
     items: [
       {
+        href: "/admin/sessions",
+        label: "Active Sessions",
+        icon: Monitor,
+        permission: PERMISSION_KEYS.SESSIONS_VIEW,
+      },
+      {
         href: "/admin/users",
-        label: "Users",
+        label: "Partners",
         icon: Users,
         permission: PERMISSION_KEYS.USERS_VIEW,
       },
@@ -100,12 +110,6 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Roles & Permissions",
         icon: Shield,
         permission: PERMISSION_KEYS.ROLES_VIEW,
-      },
-      {
-        href: "/admin/recruitment",
-        label: "Sales Recruitment",
-        icon: UserRoundSearch,
-        permission: PERMISSION_KEYS.RECRUITMENT_VIEW,
       },
       {
         href: "/admin/sales-performance",
@@ -130,6 +134,10 @@ export const NAV_SECTIONS: NavSection[] = [
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
+  "/demos": "Live Demos",
+  "/pricing": "Pricing Estimator",
+  "/account/sessions": "My Sessions",
+  "/admin/sessions": "Active Sessions",
   "/": "Dashboard",
   "/companies": "Companies",
   "/research": "Research",
@@ -138,7 +146,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/activities": "Activities",
   "/tasks": "Tasks",
   "/imports": "Imports",
-  "/admin/users": "Users",
+  "/admin/users": "Partners",
   "/admin/roles": "Roles & Permissions",
   "/admin/recruitment": "Sales Recruitment",
   "/admin/ownership-requests": "Ownership Requests",

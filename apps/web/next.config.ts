@@ -21,6 +21,7 @@ function resolveApiOrigin(): string {
 const apiOrigin = resolveApiOrigin();
 
 const nextConfig: NextConfig = {
+  ...(process.env.CRM_ISOLATED_DEV === "true" ? { distDir: ".next-isolated" } : {}),
   transpilePackages: ["@nbs/shared"],
   devIndicators: false,
   agentRules: false,

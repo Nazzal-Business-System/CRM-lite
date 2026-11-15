@@ -1,0 +1,13 @@
+"use client";
+import type { SalesMarketRef } from "@nbs/shared";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EnumSelect } from "@/components/crm/selects";
+import { useI18n } from "@/i18n/provider";
+import { marketDisplayCurrency, partnerMarketLabel } from "@/lib/partners";
+export function PartnerMarketFields({ markets, selected, defaultMarketCode, global, disabled, onChange }: { markets: SalesMarketRef[]; selected: string[]; defaultMarketCode: string | null; global: boolean; disabled?: boolean; onChange: (codes: string[], defaultCode: string | null) => void }) {
+  const { t, locale, dir } = useI18n(); const label = (code: string) => partnerMarketLabel(code, markets, locale, t("partners.international"));
+  return <div className="space-y-5"><p className="text-sm leading-relaxed text-muted-foreground">{t(global ? "partners.globalHint" : "partners.marketHint")}</p>
+    <fieldset disabled={disabled} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">{t("partners.markets")}</legend>{markets.map(market => <label key={market.code} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${selected.includes(market.code) ? "border-primary/60 bg-primary/[0.06]" : "border-border/60"}`}><Checkbox checked={selected.includes(market.code)} onCheckedChange={checked => { const next = checked === true ? [...new Set([...selected, market.code])] : selected.filter(code => code !== market.code); onChange(next, !global && defaultMarketCode && !next.includes(defaultMarketCode) ? null : defaultMarketCode); }} /><span className="min-w-0"><span className="block font-medium">{label(market.code)}</span><span className="text-xs text-muted-foreground"><bdi>{market.code}</bdi></span></span></label>)}</fieldset>
+    <div className="grid items-start gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor="partner-default" className="text-sm font-medium">{t("partners.defaultMarket")}</label><EnumSelect dir={dir} id="partner-default" value={defaultMarketCode ?? ""} allowEmpty emptyLabel={t("partners.chooseDefault")} disabled={disabled} onChange={code => onChange(selected, code || null)} options={markets.filter(market => global || selected.includes(market.code)).map(market => ({ value: market.code, label: label(market.code) }))} /></div><div className="space-y-2 text-sm"><p className="font-medium">{t("partners.displayCurrency")}</p><p className="text-muted-foreground"><bdi>{marketDisplayCurrency(defaultMarketCode) ?? "—"}</bdi></p><p className="text-xs leading-relaxed text-muted-foreground">{t("partners.currencyHint")}</p></div></div>
+  </div>;
+}
