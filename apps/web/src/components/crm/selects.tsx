@@ -32,7 +32,9 @@ export function EnumSelect<T extends string>({
   placeholder,
   allowEmpty,
   emptyLabel,
+  disabled,
   id,
+  dir,
 }: {
   value: T | "" | null | undefined;
   onChange: (value: T | "") => void;
@@ -41,12 +43,16 @@ export function EnumSelect<T extends string>({
   allowEmpty?: boolean;
   emptyLabel?: string;
   id?: string;
+  disabled?: boolean;
+  dir?: "ltr" | "rtl";
 }) {
   const { t } = useI18n();
   const resolvedEmptyLabel = emptyLabel ?? t("common.any");
 
   return (
     <Select
+      dir={dir}
+      disabled={disabled}
       value={value || (allowEmpty ? NONE : undefined)}
       onValueChange={(next) => onChange(next === NONE ? "" : (next as T))}
     >

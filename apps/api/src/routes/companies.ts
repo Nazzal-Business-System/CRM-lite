@@ -32,6 +32,8 @@ import {
   updateHypothesis,
 } from "../services/research.service";
 
+import { listSalesMarkets } from "../services/markets.service";
+
 export const companiesRouter = Router();
 
 companiesRouter.use(authenticate, requireAuth);
@@ -55,6 +57,10 @@ companiesRouter.get(
     res.json({ data: { companies } });
   },
 );
+
+companiesRouter.get("/sales-markets", requirePermission(PERMISSION_KEYS.COMPANIES_VIEW), async (_req, res) => {
+  res.json({ data: { markets: await listSalesMarkets() } });
+});
 
 companiesRouter.get(
   "/:id",

@@ -15,52 +15,59 @@ concurrency:
 
 jobs:
   backup:
-    name: Create PostgreSQL backup
+    name: Create encrypted PostgreSQL backup
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Create and validate custom-format dump
+      # Provision the public recipient before publishing this workflow change.
+      # A missing/invalid recipient fails closed; there is no plaintext fallback.
+      - name: Check public recipient configuration
+        shell: bash
+        env:
+          BACKUP_AGE_RECIPIENT: ${{ vars.CRM_BACKUP_AGE_RECIPIENT }}
+        run: |
+          set +x
+          set -Eeuo pipefail
+          if [[ ! "${BACKUP_AGE_RECIPIENT:-}" =~ ^age1[0-9a-z]+$ ]]; then
+            echo "::error::Configure CRM_BACKUP_AGE_RECIPIENT with the offline custodian's age public recipient before activation."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build backup tools (no secrets in build)
+        run: docker build --pull --tag crm-backup-tools .github/backup
+
+      - name: Create, validate and encrypt custom-format dump
         id: backup
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.CRM_BACKUP_AGE_RECIPIENT }}
+          BACKUP_EXPECTED_DATABASE: neondb
+          BACKUP_EXPECTED_NEON_PROJECT: divine-bread-20243849
+          BACKUP_EXPECTED_NEON_BRANCH: br-calm-fire-axiwyf0s
         run: |
+          set +x
           set -Eeuo pipefail
+          umask 077
+          backup_name="crm-postgres-$(date -u +'%Y%m%dT%H%M%SZ').dump.age"
+          output_dir="${RUNNER_TEMP:?}/crm-encrypted-backup"
+          mkdir -m 700 "$output_dir"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --tmpfs /work:rw,noexec,nosuid,nodev,size=512m,mode=1777 \
+            -e DATABASE_URL -e BACKUP_AGE_RECIPIENT \
+            -e BACKUP_EXPECTED_DATABASE -e BACKUP_EXPECTED_NEON_PROJECT -e BACKUP_EXPECTED_NEON_BRANCH \
+            -e BACKUP_NAME="$backup_name" \
+            -v "$output_dir:/encrypted" crm-backup-tools
+          test -s "$output_dir/$backup_name"
+          echo "backup_name=$backup_name" >> "$GITHUB_OUTPUT"
+          echo "backup_file=$output_dir/$backup_name" >> "$GITHUB_OUTPUT"
 
-          if [[ -z "${DATABASE_URL:-}" ]]; then
-            echo "::error::The NEON_BACKUP_DATABASE_URL repository secret is not configured."
-            exit 1
-          fi
-
-          timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
-          backup_name="crm-postgres-${timestamp}.dump"
-          backup_dir="${RUNNER_TEMP}/crm-database-backup"
-          backup_file="${backup_dir}/${backup_name}"
-
-          mkdir -p "${backup_dir}"
-
-          docker run --rm \
-            -e DATABASE_URL \
-            -e BACKUP_NAME="${backup_name}" \
-            -v "${backup_dir}:/backup" \
-            postgres:18-bookworm \
-            sh -eu -c 'pg_dump --dbname="$DATABASE_URL" --format=custom --file="/backup/$BACKUP_NAME"'
-
-          if [[ ! -s "${backup_file}" ]]; then
-            echo "::error::pg_dump did not produce a non-empty backup file."
-            exit 1
-          fi
-
-          docker run --rm \
-            -v "${backup_dir}:/backup:ro" \
-            postgres:18-bookworm \
-            pg_restore --list "/backup/${backup_name}" > /dev/null
-
-          echo "backup_name=${backup_name}" >> "${GITHUB_OUTPUT}"
-          echo "backup_file=${backup_file}" >> "${GITHUB_OUTPUT}"
-
-      - name: Upload private backup artifact
+      - name: Upload encrypted backup artifact
+        if: ${{ success() && steps.backup.outputs.backup_file != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.backup.outputs.backup_name }}
@@ -68,3 +75,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+      - name: Remove runner encrypted output
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf -- "${RUNNER_TEMP:?}/crm-encrypted-backup"

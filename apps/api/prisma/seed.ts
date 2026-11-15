@@ -1,4 +1,5 @@
 import {
+  INITIAL_SALES_MARKETS,
   PERMISSION_DEFINITIONS,
   SALES_DEFAULT_PERMISSIONS,
   SYSTEM_ROLE_NAMES,
@@ -137,6 +138,9 @@ async function bootstrapAdmin(adminRoleId: string) {
 }
 
 async function main() {
+  for (const market of INITIAL_SALES_MARKETS) {
+    await prisma.salesMarket.upsert({ where: { code: market.code }, create: market, update: {} });
+  }
   await upsertPermissions();
 
   const allPermissions = await prisma.permission.findMany({

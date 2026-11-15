@@ -1,0 +1,35 @@
+name: Backup encryption regression
+
+on:
+  pull_request:
+    paths:
+      - '.github/backup/**'
+      - '.github/workflows/database-backup*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-encryption:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check shell syntax
+        run: bash -n .github/backup/backup.sh .github/backup/test-backup.sh
+      - name: Lint backup scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck .github/backup/backup.sh .github/backup/test-backup.sh
+      - name: Build tools
+        run: docker build --pull --tag crm-backup-test .github/backup
+      - name: Encrypt, decrypt and restore synthetic data without network or production secrets
+        run: |
+          docker run --rm --network none \
+            --tmpfs /work:rw,noexec,nosuid,nodev,size=512m,mode=1777 \
+            --tmpfs /encrypted:rw,noexec,nosuid,nodev,size=32m \
+            --entrypoint /usr/local/bin/test-backup.sh crm-backup-test

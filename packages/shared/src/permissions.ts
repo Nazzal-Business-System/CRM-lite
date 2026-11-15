@@ -1,4 +1,10 @@
 export const PERMISSION_KEYS = {
+  DEMOS_VIEW: "demos.view",
+  PRICING_PRICEBOOKS_MANAGE: "pricing.pricebooks.manage",
+  PRICING_VIEW: "pricing.view",
+  PRICING_ESTIMATES_CREATE: "pricing.estimates.create",
+  PRICING_ESTIMATES_VIEW_ALL: "pricing.estimates.view_all",
+  MARKETS_MANAGE_MEMBERSHIPS: "markets.manage_memberships",
   DASHBOARD_VIEW: "dashboard.view",
   SALES_PERFORMANCE_VIEW: "sales_performance.view",
 
@@ -45,6 +51,8 @@ export const PERMISSION_KEYS = {
   ROLES_UPDATE: "roles.update",
   ROLES_DELETE: "roles.delete",
 
+  SESSIONS_VIEW: "sessions.view",
+  SESSIONS_REVOKE: "sessions.revoke",
   AUDIT_LOGS_VIEW: "audit_logs.view",
   OWNERSHIP_REQUESTS_CREATE: "ownership_requests.create",
   OWNERSHIP_REQUESTS_VIEW: "ownership_requests.view",
@@ -56,6 +64,8 @@ export type PermissionKey =
   (typeof PERMISSION_KEYS)[keyof typeof PERMISSION_KEYS];
 
 export const PERMISSION_CATEGORIES = [
+  "Demos",
+  "Pricing",
   "Dashboard",
   "Sales Performance",
   "Companies",
@@ -80,6 +90,24 @@ export interface PermissionDefinition {
 }
 
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
+  { key: PERMISSION_KEYS.DEMOS_VIEW, description: "Discover internal live demo destinations", category: "Demos", actionLabel: "View" },
+  { key: PERMISSION_KEYS.PRICING_ESTIMATES_CREATE, description: "Save new immutable internal pricing estimates", category: "Pricing", actionLabel: "Create" },
+  { key: PERMISSION_KEYS.PRICING_ESTIMATES_VIEW_ALL, description: "Read estimates across creators, subject to company access", category: "Pricing", actionLabel: "View all" },
+  { key: PERMISSION_KEYS.PRICING_PRICEBOOKS_MANAGE, description: "Manage explicit user price-book grants and defaults (system Admin only)", category: "Pricing", actionLabel: "Manage price-book access" },
+  { key: PERMISSION_KEYS.PRICING_VIEW, description: "View internal pricing configuration and calculate authorized estimates", category: "Pricing", actionLabel: "View" },
+  { key: PERMISSION_KEYS.MARKETS_MANAGE_MEMBERSHIPS, description: "Manage user sales market memberships (system Admin only)", category: "Governance", actionLabel: "Manage market memberships" },
+  {
+    key: PERMISSION_KEYS.SESSIONS_VIEW,
+    description: "View sessions across CRM users",
+    category: "Governance",
+    actionLabel: "View sessions",
+  },
+  {
+    key: PERMISSION_KEYS.SESSIONS_REVOKE,
+    description: "Revoke individual sessions across CRM users",
+    category: "Governance",
+    actionLabel: "Revoke sessions",
+  },
   {
     key: PERMISSION_KEYS.DASHBOARD_VIEW,
     description: "View the CRM dashboard",

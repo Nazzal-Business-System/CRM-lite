@@ -12,15 +12,15 @@ export function sessionCookieScope(): CookieOptions {
   };
 }
 
-export function sessionCookieOptions(): CookieOptions {
+export function sessionCookieOptions(maxAge = expiryToMs(env.JWT_EXPIRES_IN)): CookieOptions {
   return {
     ...sessionCookieScope(),
-    maxAge: expiryToMs(env.JWT_EXPIRES_IN),
+    maxAge,
   };
 }
 
-export function setSessionCookie(res: Response, token: string): void {
-  res.cookie(env.COOKIE_NAME, token, sessionCookieOptions());
+export function setSessionCookie(res: Response, token: string, maxAge?: number): void {
+  res.cookie(env.COOKIE_NAME, token, sessionCookieOptions(maxAge));
 }
 
 export function clearSessionCookie(res: Response): void {

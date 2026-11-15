@@ -2,16 +2,20 @@ import type {
   CreateUserInput,
   UpdateUserActivationInput,
   UpdateUserInput,
+  AuthUser,
 } from "@nbs/shared";
 import { hasAdminCapability } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
+import { marketUserOptionsWhere, assertGlobalMarketAdminSurvives, isGlobalMarketAdmin, marketStorage } from "../lib/market-access";
 import { prisma } from "../lib/prisma";
 import { hashPassword } from "../lib/password";
 import { serializeAuthUser, userAccessInclude } from "../lib/serialize";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { countActiveAdminCapableUsers } from "./rbac.service";
 import { conciseChanges, writeAuditLog } from "./audit.service";
+import { lockSessionUser, revokeUserSessions } from "./sessions.service";
 import { createNotification } from "./notifications.service";
+import { assertPartnerMarketAdmin, storePartnerMarkets, validatePartnerMarkets } from "./partner-markets.service";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -36,7 +40,7 @@ async function getRolePermissionKeys(roleId: string): Promise<string[]> {
 
 export async function listActiveUserOptions() {
   return prisma.user.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...await marketUserOptionsWhere(prisma) },
     orderBy: { name: "asc" },
     select: { id: true, name: true, email: true },
   });
@@ -51,24 +55,35 @@ export async function listUsers() {
   return users.map(serializeAuthUser);
 }
 
-export async function createUser(input: CreateUserInput, actorUserId: string) {
+export async function createUser(input: CreateUserInput, actorUserId: string, actor?: AuthUser) {
   await getRolePermissionKeys(input.roleId);
+  const withMarkets = input.marketCodes !== undefined || input.defaultMarketCode !== undefined || input.accountType === "PARTNER";
+  if (withMarkets) assertPartnerMarketAdmin(actor);
+  const passwordHash = await hashPassword(input.password);
 
   try {
-    const user = await prisma.user.create({
+    return await marketStorage(() => prisma.$transaction(async tx => {
+      const role = await tx.role.findUnique({ where: { id: input.roleId } });
+      if (!role) throw badRequest("Selected role was not found.");
+      const marketCodes = input.marketCodes ?? [];
+      const defaultMarketCode = input.defaultMarketCode ?? null;
+      await validatePartnerMarkets(tx, { accountType: input.accountType ?? "INTERNAL", marketCodes, defaultMarketCode, global: isGlobalMarketAdmin({ role }) });
+      const user = await tx.user.create({
       data: {
+        ...(input.accountType === "PARTNER" ? { accountType: "PARTNER" as const } : {}),
         name: input.name.trim(),
         email: normalizeEmail(input.email),
-        passwordHash: await hashPassword(input.password),
+        passwordHash,
         roleId: input.roleId,
         isActive: input.isActive ?? true,
       },
       include: userAccessInclude,
     });
 
-    const result = serializeAuthUser(user);
-    await writeAuditLog({ actorUserId, action: "USER_CREATED", entityType: "USER", entityId: user.id, entityLabel: user.name, metadata: { role: result.role.name, isActive: result.isActive } });
-    return result;
+      if (withMarkets) await storePartnerMarkets(tx, user.id, marketCodes, defaultMarketCode, actor!);
+      await writeAuditLog({ actorUserId, action: "USER_CREATED", entityType: "USER", entityId: user.id, entityLabel: user.name, metadata: { role: user.role.name, isActive: user.isActive, accountType: input.accountType ?? "INTERNAL" } }, tx);
+      return serializeAuthUser((await tx.user.findUnique({ where: { id: user.id }, include: userAccessInclude }))!);
+    }));
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -84,7 +99,10 @@ export async function updateUser(
   userId: string,
   input: UpdateUserInput & Partial<UpdateUserActivationInput>,
   actorUserId: string,
+  actor?: AuthUser,
 ) {
+  const withMarkets = input.marketCodes !== undefined || input.defaultMarketCode !== undefined || input.accountType !== undefined;
+  if (withMarkets) assertPartnerMarketAdmin(actor);
   const existing = await prisma.user.findUnique({
     where: { id: userId },
     include: userAccessInclude,
@@ -118,20 +136,38 @@ export async function updateUser(
   }
 
   try {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-        ...(input.email !== undefined
-          ? { email: normalizeEmail(input.email) }
-          : {}),
-        ...(input.roleId !== undefined ? { roleId: input.roleId } : {}),
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        ...(input.password
-          ? { passwordHash: await hashPassword(input.password) }
-          : {}),
-      },
-      include: userAccessInclude,
+    const nextPasswordHash = input.password ? await hashPassword(input.password) : undefined;
+    const invalidateSessions = Boolean(nextPasswordHash) || input.isActive === false;
+    const user = await prisma.$transaction(async (tx) => {
+      await lockSessionUser(tx, userId);
+      await assertGlobalMarketAdminSurvives(tx, existing, input);
+      const locked = await tx.user.findUnique({ where: { id: userId }, include: userAccessInclude });
+      if (!locked) throw notFound("User not found.");
+      const role = input.roleId ? await tx.role.findUnique({ where: { id: input.roleId } }) : locked.role;
+      if (!role) throw badRequest("Selected role was not found.");
+      const marketCodes = input.marketCodes ?? locked.marketMemberships.map(item => item.marketCode);
+      const defaultMarketCode = input.defaultMarketCode !== undefined ? input.defaultMarketCode : locked.defaultMarketCode;
+      await validatePartnerMarkets(tx, { accountType: input.accountType ?? locked.accountType, marketCodes, defaultMarketCode, global: isGlobalMarketAdmin({ role }) });
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(input.accountType !== undefined ? { accountType: input.accountType } : {}),
+          ...(invalidateSessions ? { sessionVersion: { increment: 1 }, legacyInvalidBefore: new Date() } : {}),
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.email !== undefined
+            ? { email: normalizeEmail(input.email) }
+            : {}),
+          ...(input.roleId !== undefined ? { roleId: input.roleId } : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          ...(nextPasswordHash
+            ? { passwordHash: nextPasswordHash }
+            : {}),
+        },
+        include: userAccessInclude,
+      });
+      if (invalidateSessions) await revokeUserSessions(tx, userId, nextPasswordHash ? "PASSWORD_CHANGED" : "ACCOUNT_DEACTIVATED");
+      if (withMarkets) await storePartnerMarkets(tx, userId, marketCodes, defaultMarketCode, actor!);
+      return withMarkets ? (await tx.user.findUnique({ where: { id: userId }, include: userAccessInclude }))! : updated;
     });
 
     const result = serializeAuthUser(user);

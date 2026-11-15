@@ -4,17 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "dev": "node --import tsx scripts/isolated-dev.ts api",
     "build": "prisma generate && tsup",
     "start": "node dist/index.js",
     "typecheck": "prisma generate && tsc --noEmit",
-    "lint": "eslint src prisma/seed.ts prisma.config.ts tsup.config.ts",
+    "lint": "eslint src scripts prisma/seed.ts prisma.config.ts tsup.config.ts",
     "test": "tsx --test src/**/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "permissions:sync-sessions": "tsx scripts/sync-session-permissions.ts",
+    "markets:provision": "tsx scripts/provision-company-territories.ts",
+    "companies:backfill-territory": "tsx scripts/provision-company-territories.ts --backfill",
+    "permissions:sync-markets": "tsx scripts/sync-market-permission.ts",
+    "permissions:sync-pricing": "tsx scripts/sync-pricing-permissions.ts"
   },
   "dependencies": {
     "@nbs/shared": "*",

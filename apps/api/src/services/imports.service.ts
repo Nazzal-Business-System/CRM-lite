@@ -32,13 +32,28 @@ import {
   PERMISSION_KEYS,
 } from "@nbs/shared";
 import ExcelJS from "exceljs";
+import { marketContext } from "../lib/market-context";
+import { assertMarketOwnerEligibility } from "../lib/market-access";
 import { prisma } from "../lib/prisma";
-import { badRequest } from "../lib/errors";
+import { AppError, badRequest } from "../lib/errors";
 import { logger } from "../lib/logger";
 import { rowsFromSpreadsheet } from "../lib/spreadsheet";
 import { findCompanyDuplicates } from "./companies.service";
 import { writeAuditLog } from "./audit.service";
 import { createNotification } from "./notifications.service";
+
+import { COUNTRY_CODES } from "@nbs/shared";
+import { listSalesMarkets, validateCompanyTerritory } from "./markets.service";
+
+async function importTerritory(values: Record<string, string | null>, messages: string[]) {
+  try {
+    return await validateCompanyTerritory(cell(values, "Country Code"), cell(values, "Sales Market"));
+  } catch (error) {
+    if (!(error instanceof AppError) || error.status !== 400) throw error;
+    messages.push(...(error.fields ? Object.values(error.fields).flat() : [error.message]));
+    return null;
+  }
+}
 
 function cell(values: Record<string, string | null>, header: string): string {
   const raw = values[header];
@@ -76,11 +91,15 @@ function rowMessage(
   return `${label} ${companyNumber} — ${message}`;
 }
 
-function truthy(raw: string): boolean {
-  return ["1", "true", "yes", "y"].includes(raw.trim().toLowerCase());
+function truthy(raw: string): boolean { return ["1", "true", "yes", "y"].includes(raw.trim().toLowerCase()); }
+function validatePrimary(raw: string, messages: string[]) {
+  if (raw && !["1", "0", "true", "false", "yes", "no", "y", "n"].includes(raw.trim().toLowerCase())) messages.push("Primary: must be Yes, No or blank.");
+}
+function companyNameIndex<T extends { nameNormalized: string }>(companies: T[]) {
+  const result=new Map<string,T[]>();for(const company of companies)result.set(company.nameNormalized,[...(result.get(company.nameNormalized)??[]),company]);return result;
 }
 
-async function validateImportOwnerEmail(raw: string, messages: string[]): Promise<void> {
+async function validateImportOwnerEmail(raw: string, messages: string[], marketCode?: string): Promise<void> {
   const ownerEmail = parseOptionalEmail(raw, "Owner Email");
   pushParseError(messages, ownerEmail.error);
   if (ownerEmail.error || !ownerEmail.value) {
@@ -92,6 +111,14 @@ async function validateImportOwnerEmail(raw: string, messages: string[]): Promis
   });
   if (!owner) {
     messages.push(`Owner Email: no active CRM user matches "${ownerEmail.value}"`);
+  } else if (marketContext.getStore()?.actor() && owner.id !== marketContext.getStore()!.actor()!.id && !hasPermission(marketContext.getStore()!.actor()!.permissions, PERMISSION_KEYS.OWNERSHIP_ASSIGN)) {
+    messages.push("Owner Email: must be your own account.");
+  } else if (marketCode) {
+    try { await assertMarketOwnerEligibility(prisma, owner.id, marketCode); }
+    catch (error) {
+      if (!(error instanceof AppError) || error.status !== 400) throw error;
+      messages.push("Owner Email: must be eligible for the selected market.");
+    }
   }
 }
 
@@ -128,6 +155,7 @@ async function rowsFromBuffer(
   try {
     return await rowsFromSpreadsheet(filename, buffer, entity);
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("IMPORT_HEADERS:")) throw badRequest(error.message.slice("IMPORT_HEADERS:".length).trim());
     if (error instanceof Error && error.message === "FILE_TYPE") {
       throw badRequest("Upload a .csv or .xlsx file.");
     }
@@ -162,6 +190,7 @@ async function previewCompanies(
       messages.push("Company name is required.");
     }
 
+    const territory = await importTerritory(values, messages);
     const rowNumber = index + 1;
     pushParseError(messages, parseCompanySize(cell(values, "Company Size")).error);
     pushParseError(messages, parseCompanySource(cell(values, "Source")).error);
@@ -178,7 +207,7 @@ async function previewCompanies(
     pushParseError(messages, problem.error);
     pushParseError(messages, access.error);
     pushParseError(messages, parseOptionalUrl(cell(values, "Website"), "Website").error);
-    await validateImportOwnerEmail(cell(values, "Owner Email"), messages);
+    await validateImportOwnerEmail(cell(values, "Owner Email"), messages, territory?.salesMarketCode);
     pushParseError(
       messages,
       parseOptionalUrl(cell(values, "Evidence Source URL"), "Evidence Source URL").error,
@@ -268,7 +297,7 @@ async function previewContacts(
   const companies = await prisma.company.findMany({
     select: { id: true, name: true, nameNormalized: true },
   });
-  const companyByName = new Map(companies.map((company) => [company.nameNormalized, company]));
+  const companyByName = companyNameIndex(companies);
   const seen = new Set<string>();
   const rows: ImportPreviewRow[] = [];
 
@@ -283,11 +312,12 @@ async function previewContacts(
       messages.push("Contact name is required.");
     }
 
-    const company = companyName
-      ? companyByName.get(normalizeCompanyName(companyName))
-      : undefined;
+    const matches = companyByName.get(normalizeCompanyName(companyName)) ?? [];
+    const company = matches.length === 1 ? matches[0] : undefined;
+    if (matches.length > 1) messages.push("Company Name: must match exactly one accessible company; multiple matches found.");
+    validatePrimary(cell(values,"Primary"),messages);
     if (companyName && !company) {
-      messages.push("Company was not found. Import companies first.");
+      messages.push("Company was not found in your accessible markets. Import companies first or check the exact name and market access.");
     }
 
     pushParseError(messages, parseDecisionRole(cell(values, "Decision Role")).error);
@@ -297,19 +327,16 @@ async function previewContacts(
 
     const email = parseOptionalEmail(cell(values, "Email"), "Email").value ?? "";
 
-    const key = `${company?.id ?? companyName}:${email || name.toLowerCase()}`;
-    if (seen.has(key)) {
-      messages.push("Duplicate contact in this file.");
-    } else if (name) {
-      seen.add(key);
-    }
+    const keys = [`${company?.id ?? companyName}:name:${name.toLowerCase()}`, ...(email ? [`${company?.id ?? companyName}:email:${email}`] : [])];
+    if (keys.some(key=>seen.has(key))) messages.push("Duplicate contact in this file.");
+    if (name) keys.forEach(key=>seen.add(key));
 
     if (company && name) {
       const existing = await prisma.contact.findFirst({
         where: {
           companyId: company.id,
           OR: [
-            email ? { email } : { id: "__never__" },
+            email ? { email: { equals: email, mode: "insensitive" } } : { id: "__never__" },
             { name: { equals: name, mode: "insensitive" } },
           ],
         },
@@ -391,6 +418,8 @@ export async function commitImport(
         result.errors.push({ rowNumber: row.rowNumber, message: "Company name is required." });
         continue;
       }
+      const territory = await importTerritory(row.values, messages);
+      if (!territory) { result.invalid++; result.errors.push({rowNumber:row.rowNumber,message:rowMessage("COMPANIES",row.rowNumber,messages.join(" "))}); continue; }
       const nameNormalized = normalizeCompanyName(name);
       const websiteDomain = normalizeWebsiteDomain(cell(row.values, "Website") || null);
       const batchKey = `${nameNormalized}::${websiteDomain ?? ""}`;
@@ -441,7 +470,11 @@ export async function commitImport(
         messages.push("Owner Email: must be your own account");
       }
 
-      if (messages.some(isBlockingMessage) || !ownerId) {
+      if (ownerId && territory) {
+        try { await assertMarketOwnerEligibility(prisma,ownerId,territory.salesMarketCode); }
+        catch(error) { if (!(error instanceof AppError) || error.status !== 400) throw error; messages.push("Owner Email: must be eligible for the selected market."); }
+      }
+      if (messages.some(isBlockingMessage) || !ownerId || !territory) {
         result.invalid += 1;
         result.errors.push({
           rowNumber: row.rowNumber,
@@ -459,6 +492,7 @@ export async function commitImport(
       try {
         const company = await prisma.company.create({
           data: {
+            ...territory,
             name,
             nameNormalized,
             website: website.value,
@@ -527,7 +561,7 @@ export async function commitImport(
   const companies = await prisma.company.findMany({
     select: { id: true, nameNormalized: true },
   });
-  const companyByName = new Map(companies.map((company) => [company.nameNormalized, company.id]));
+  const companyByName = companyNameIndex(companies);
 
   for (const row of input.rows) {
     if (!row.included) {
@@ -536,12 +570,13 @@ export async function commitImport(
     }
     const companyName = cell(row.values, "Company Name");
     const name = cell(row.values, "Name");
-    const companyId = companyByName.get(normalizeCompanyName(companyName));
+    const matches = companyByName.get(normalizeCompanyName(companyName)) ?? [];
+    const companyId = matches.length === 1 ? matches[0]!.id : undefined;
     if (!companyId || !name) {
       result.invalid += 1;
       result.errors.push({
         rowNumber: row.rowNumber,
-        message: !companyId ? "Company was not found." : "Contact name is required.",
+        message: rowMessage("CONTACTS",row.rowNumber,!companyId ? matches.length>1 ? "Company Name: must match exactly one accessible company; multiple matches found." : "Company was not found in your accessible markets." : "Contact name is required."),
       });
       continue;
     }
@@ -560,7 +595,7 @@ export async function commitImport(
       where: {
         companyId,
         OR: [
-          email ? { email } : { id: "__never__" },
+          email ? { email: { equals: email, mode: "insensitive" } } : { id: "__never__" },
           { name: { equals: name, mode: "insensitive" } },
         ],
       },
@@ -572,6 +607,7 @@ export async function commitImport(
     }
 
     const messages: string[] = [];
+    validatePrimary(cell(row.values,"Primary"), messages);
     const decisionRole = parseDecisionRole(cell(row.values, "Decision Role"));
     const preferredChannel = parsePreferredChannel(cell(row.values, "Preferred Channel"));
     const linkedIn = parseOptionalUrl(cell(row.values, "LinkedIn URL"), "LinkedIn URL");
@@ -646,6 +682,20 @@ export async function buildTemplateWorkbook(entity: ImportEntity): Promise<Buffe
   };
 
   if (entity === "COMPANIES") {
+    const references = workbook.addWorksheet("Territory codes", { state: "hidden" });
+    const markets = await listSalesMarkets();
+    COUNTRY_CODES.forEach((code, i) => { references.getCell(i + 1, 1).value = code; });
+    markets.forEach((market, i) => { references.getCell(i + 1, 2).value = market.code; });
+    workbook.definedNames.add(`'Territory codes'!$A$1:$A$${COUNTRY_CODES.length}`, "CountryCodes");
+    if (markets.length) workbook.definedNames.add(`'Territory codes'!$B$1:$B$${markets.length}`, "SalesMarkets");
+    for (const [header, reference] of [["Country Code", "CountryCodes"], ["Sales Market", "SalesMarkets"]]) {
+      if (reference === "SalesMarkets" && !markets.length) continue;
+      const column = (columns as readonly string[]).indexOf(header!) + 1;
+      for (let row = 2; row <= lastRow; row++) sheet.getCell(row, column).dataValidation = {
+        type: "list", allowBlank: false, formulae: [reference!], showErrorMessage: true,
+        error: "Choose an explicit country or configured sales market code.",
+      };
+    }
     addList("Company Size", COMPANY_SIZE_IMPORT_VALUES);
     addList("Source", COMPANY_SOURCE_IMPORT_VALUES);
   } else {
@@ -665,7 +715,9 @@ ${COMPANY_IMPORT_COLUMNS.join(" | ")}
 
 Rules:
 - File format: CSV or XLSX.
-- Company Name is required.
+- Company Name, Country Code and Sales Market are required.
+- Country Code is the actual location, using an ISO alpha-2 code (JO, GB, US, etc.).
+- Sales Market is an explicitly chosen operational territory code, initially JO, UK, US or OTHER. UK is a market; GB is the country code. Never infer or default market from country.
 - Optional columns may be left blank; missing optional fields are valid.
 - Company Size must be one of: ${Object.values(COMPANY_SIZE_LABELS).join(", ")}.
 - Source must be one of: ${Object.values(COMPANY_SOURCE_LABELS).join(", ")}.
@@ -700,3 +752,13 @@ Rules:
 - Do not treat public research as customer-confirmed information.
 
 Return only tabular data that can be imported into NBS CRM.`;
+
+export async function buildImportPrompt(entity: ImportEntity): Promise<string> {
+  if(entity === "CONTACTS") return CONTACT_AI_PROMPT + "\nCompany Name must identify exactly one company visible to the importing user. Never create a company or infer an association. No country/market columns are accepted for contacts; access comes from the linked company.";
+  const codes=(await listSalesMarkets()).map(m=>m.code);
+  return COMPANY_AI_PROMPT.replace("initially JO, UK, US or OTHER",codes.length ? "authorized for this user: " + codes.join(", ") : "none currently authorized for this user (do not generate import rows)") + "\nOnly use the authorized sales-market codes above. Never default to Jordan. Customer countries are independent ISO country codes and may differ from the operational territory.";
+}
+export function buildTemplateCsv(entity: ImportEntity): Buffer {
+  const columns=entity === "CONTACTS" ? CONTACT_IMPORT_COLUMNS : COMPANY_IMPORT_COLUMNS;
+  return Buffer.from("\uFEFF"+columns.map(column=>'"'+column.replaceAll('"','""')+'"').join(",")+"\r\n","utf8");
+}

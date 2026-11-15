@@ -126,7 +126,15 @@ enum OwnershipRequestStatus {
   REJECTED
 }
 
+enum UserAccountType {
+  INTERNAL
+  PARTNER
+}
+
 model User {
+  accountType UserAccountType @default(INTERNAL)
+  defaultMarketCode String? @db.VarChar(32)
+  defaultMarket SalesMarket? @relation("UserDefaultMarket", fields: [defaultMarketCode], references: [code], onDelete: Restrict, onUpdate: Cascade)
   id           String    @id @default(cuid())
   name         String
   email        String    @unique
@@ -135,6 +143,15 @@ model User {
   role         Role      @relation(fields: [roleId], references: [id])
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
+  sessionVersion Int @default(0)
+  legacyInvalidBefore DateTime?
+  sessions Session[]
+  marketMemberships UserSalesMarket[]
+  pricingEstimates PricingEstimate[]
+  archivedPricingEstimates PricingEstimateArchive[]
+  priceBookGrants PriceBookGrant[] @relation("PriceBookUser")
+  assignedPriceBookGrants PriceBookGrant[] @relation("PriceBookAssignedBy")
+  pricingPreference UserPricingPreference?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -155,6 +172,7 @@ model User {
 
   @@index([roleId])
   @@index([isActive])
+  @@index([defaultMarketCode])
   @@map("users")
 }
 
@@ -257,9 +275,38 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+model UserSalesMarket {
+  userId String
+  marketCode String @db.VarChar(32)
+  assignedAt DateTime @default(now())
+  assignedByUserId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market SalesMarket @relation(fields: [marketCode], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([userId, marketCode])
+  @@index([marketCode])
+  @@map("user_sales_markets")
+}
+
+model SalesMarket {
+  defaultUsers User[] @relation("UserDefaultMarket")
+  code      String    @id @db.VarChar(32)
+  name      String
+  nameAr    String
+  companies Company[]
+  memberships UserSalesMarket[]
+
+  @@map("sales_markets")
+}
+
 model Company {
   id                   String        @id @default(cuid())
   name                 String
+  countryCode          String?       @db.VarChar(2)
+  salesMarketCode      String?       @db.VarChar(32)
+  salesMarket          SalesMarket?  @relation(fields: [salesMarketCode], references: [code], onDelete: Restrict, onUpdate: Cascade)
+  // Captured once by the expansion migration. New records always default false.
+  countryMarketLegacyCohort Boolean   @default(false)
   nameNormalized       String
   website              String?
   websiteDomain        String?
@@ -279,18 +326,82 @@ model Company {
   updatedAt            DateTime      @updatedAt
 
   contacts      Contact[]
+  pricingEstimates PricingEstimate[]
   evidence      ResearchEvidence[]
   hypotheses    Hypothesis[]
   opportunities Opportunity[]
   activities    Activity[]
   tasks         Task[]
 
+  @@index([countryCode])
+  @@index([salesMarketCode])
   @@index([nameNormalized])
   @@index([websiteDomain])
   @@index([ownerId])
   @@index([priority])
   @@index([name])
   @@map("companies")
+}
+
+enum PriceBookCode {
+  JO
+  US
+  UK
+}
+
+model PriceBookGrant {
+  userId String
+  bookId PriceBookCode
+  assignedByUserId String
+  assignedAt DateTime @default(now())
+  user User @relation("PriceBookUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assignedBy User @relation("PriceBookAssignedBy", fields: [assignedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  defaults UserPricingPreference[] @relation("AuthorizedPriceBookDefault")
+  @@id([userId, bookId])
+  @@index([bookId, userId])
+  @@map("user_price_book_grants")
+}
+
+model UserPricingPreference {
+  userId String @id
+  defaultBookId PriceBookCode?
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  defaultGrant PriceBookGrant? @relation("AuthorizedPriceBookDefault", fields: [userId, defaultBookId], references: [userId, bookId], onDelete: Restrict, onUpdate: Cascade, map: "user_pricing_preferences_default_grant_fkey")
+  @@map("user_pricing_preferences")
+}
+
+model PricingEstimateBook {
+  estimateId String @id
+  bookId PriceBookCode
+  bookVersion String @db.VarChar(80)
+  structureVersion String @db.VarChar(80)
+  estimate PricingEstimate @relation(fields: [estimateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([bookId, estimateId])
+  @@map("pricing_estimate_books")
+}
+
+model PricingEstimate {
+  archive PricingEstimateArchive?
+  priceBookSnapshot    PricingEstimateBook?
+  id                   String   @id @default(cuid())
+  createdById          String
+  createdBy            User     @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  companyId            String?
+  company              Company? @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  title                String   @db.VarChar(200)
+  notes                String   @db.Text
+  currency             String   @db.VarChar(3)
+  catalogVersion       String   @db.VarChar(80)
+  calculationVersion   String   @db.VarChar(80)
+  configurationVersion Int
+  selection            Json
+  result               Json
+  createdAt            DateTime @default(now())
+
+  @@index([createdById, createdAt, id])
+  @@index([companyId, createdAt, id])
+  @@index([createdAt, id])
+  @@map("pricing_estimates")
 }
 
 model ResearchEvidence {
@@ -474,4 +585,34 @@ model RecruitmentCandidate {
   @@index([createdById])
   @@index([fullName])
   @@map("recruitment_candidates")
+}
+
+// Tokens are never persisted, including tokens adopted from legacy JWT cookies.
+model Session {
+  id                String    @id @default(cuid())
+  tokenHash         String    @unique @db.Char(64)
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionVersion    Int
+  isLegacy          Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  lastActivityAt    DateTime
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  revocationReason  String?   @db.VarChar(64)
+  userAgent         String?   @db.VarChar(256)
+
+  @@index([userId, revokedAt])
+  @@index([absoluteExpiresAt])
+  @@map("sessions")
+}
+
+model PricingEstimateArchive {
+  estimateId String @id
+  archivedById String
+  archivedAt DateTime @default(now())
+  estimate PricingEstimate @relation(fields: [estimateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  archivedBy User @relation(fields: [archivedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@map("pricing_estimate_archives")
 }

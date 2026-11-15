@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  COUNTRY_CODES,
   COMPANY_SIZES,
   COMPANY_SOURCES,
   PERMISSION_KEYS,
@@ -23,7 +24,7 @@ import {
   EmptyState,
   PageFrame,
   PageHeader,
-  PaginationBar,
+  CompactPagination,
   PriorityBadge,
   QualificationLabel,
   QueryPanel,
@@ -32,7 +33,7 @@ import {
   ToolbarFilter,
   ToolbarSearch,
 } from "@/components/crm/primitives";
-import { EnumSelect, FormField } from "@/components/crm/selects";
+import { EnumSelect, FormField, UserSelect } from "@/components/crm/selects";
 import { OwnerControl } from "@/components/ownership/owner-control";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,8 +68,11 @@ import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { navigateTo } from "@/lib/navigate";
-import { toQuery, useDebouncedValue } from "@/lib/query";
-import { sortParams, type SortSelection } from "@/lib/sorting";
+import { useDebouncedValue } from "@/lib/query";
+import { type SortSelection } from "@/lib/sorting";
+import { companyMarketListRequest, isSystemMarketAdmin, marketCatalogOptions, marketErrorKey } from "@/lib/market-management";
+import { useAuth } from "@/providers/auth-provider";
+import { CompanyTerritory } from "./company-territory";
 
 const SCORE_OPTIONS = Array.from({ length: QUALIFICATION_MAX }, (_, index) => ({
   value: String(index + QUALIFICATION_MIN),
@@ -76,6 +80,8 @@ const SCORE_OPTIONS = Array.from({ length: QUALIFICATION_MAX }, (_, index) => ({
 }));
 
 interface CompanyFormState {
+  countryCode: string;
+  salesMarketCode: string;
   name: string;
   website: string;
   sector: string;
@@ -90,6 +96,8 @@ interface CompanyFormState {
 }
 
 const emptyForm: CompanyFormState = {
+  countryCode: "",
+  salesMarketCode: "",
   name: "",
   website: "",
   sector: "",
@@ -105,6 +113,8 @@ const emptyForm: CompanyFormState = {
 
 function formFromCompany(company: CompanyDetail): CompanyFormState {
   return {
+    countryCode: company.countryCode ?? "",
+    salesMarketCode: company.salesMarketCode ?? "",
     name: company.name,
     website: company.website ?? "",
     sector: company.sector ?? "",
@@ -132,7 +142,10 @@ export function CompanyFormDialog({
   onOpenChange: (open: boolean) => void;
   company?: CompanyDetail | null;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { user: viewer } = useAuth();
+  const markets = useQuery({ ...marketCatalogOptions(viewer?.id), enabled: open && Boolean(viewer) });
+  const countryNames = new Intl.DisplayNames([locale], { type: "region" });
   const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -144,6 +157,9 @@ export function CompanyFormDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       const payload = {
+        // Omit unchanged legacy blanks on PATCH; POST always sends explicit required selections.
+        ...(!company || form.countryCode ? { countryCode: form.countryCode } : {}),
+        ...(!company || form.salesMarketCode ? { salesMarketCode: form.salesMarketCode } : {}),
         name: form.name,
         website: form.website,
         sector: form.sector,
@@ -223,6 +239,22 @@ export function CompanyFormDialog({
               />
             </FormField>
           </div>
+          <FormField label={t("companies.countryCode")} required={!company} error={errors.countryCode}>
+            <EnumSelect value={form.countryCode} onChange={(value) => setForm({ ...form, countryCode: value })}
+              options={COUNTRY_CODES.map((value) => ({ value, label: `${countryNames.of(value)} (${value})` })).sort((a, b) => a.label.localeCompare(b.label, locale))}
+              placeholder={t("companies.chooseCountry")} />
+          </FormField>
+          <FormField label={t("companies.salesMarket")} required={!company} error={errors.salesMarketCode}>
+            <EnumSelect disabled={Boolean(company) && !isSystemMarketAdmin(viewer)} value={form.salesMarketCode} onChange={(value) => setForm({ ...form, salesMarketCode: value })}
+              options={(markets.data?.markets ?? []).map((market) => ({ value: market.code, label: locale === "ar" ? market.nameAr : market.name }))}
+              placeholder={t("companies.chooseMarket")} />
+            <p className="text-xs text-muted-foreground">{t("markets.companyMarketHint")}</p>
+            {company && !isSystemMarketAdmin(viewer) && <p className="text-xs text-muted-foreground">{t("markets.adminMoveOnly")}</p>}
+            {markets.isLoading ? <p role="status">{t("common.loading")}</p> : null}
+            {markets.isError && <p role="alert" className="text-xs text-destructive">{t(marketErrorKey(markets.error))}</p>}
+            {markets.isError && !(markets.error instanceof ApiError && markets.error.status === 403) ? <Button type="button" variant="outline" onClick={() => void markets.refetch()}>{t("common.retry")}</Button> : null}
+            {!markets.isPending && !markets.isError && markets.data?.markets.length === 0 && <p role="status" className="text-xs text-muted-foreground">{t("markets.noVisibleMarkets")}</p>}
+          </FormField>
           <FormField
             label={t("companies.website")}
             htmlFor="company-website"
@@ -348,7 +380,7 @@ export function CompanyFormDialog({
             >
               {t("common.cancel")}
             </Button>
-            <Button type="submit" loading={mutation.isPending}>
+            <Button type="submit" loading={mutation.isPending} disabled={!company && (!form.countryCode || !form.salesMarketCode || markets.isError || markets.isPending)}>
               {mutation.isPending
                 ? t("common.saving")
                 : company
@@ -364,6 +396,12 @@ export function CompanyFormDialog({
 
 export function CompaniesWorkspace() {
   const { t, locale } = useI18n();
+  const { user: viewer } = useAuth();
+  const markets = useQuery({ ...marketCatalogOptions(viewer?.id), enabled: Boolean(viewer) });
+  const countryNames = new Intl.DisplayNames([locale], { type: "region" });
+  const [countryCode, setCountryCode] = useState("");
+  const [salesMarketCode, setSalesMarketCode] = useState("");
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
@@ -377,18 +415,12 @@ export function CompaniesWorkspace() {
   const [deleteTarget, setDeleteTarget] = useState<CompanySummary | null>(null);
   const debouncedSearch = useDebouncedValue(search);
 
+  const request = companyMarketListRequest({ search: debouncedSearch, priority, sort, page, countryCode, salesMarketCode, ownerId }, viewer?.id);
+  const filtered = Boolean(search || priority || countryCode || salesMarketCode || ownerId);
+  const clearFilters = () => { setSearch(""); setPriority(""); setCountryCode(""); setSalesMarketCode(""); setOwnerId(null); setPage(1); };
   const query = useQuery({
-    queryKey: ["companies", debouncedSearch, priority, sort, page],
-    queryFn: () =>
-      api.get<PaginatedResult<CompanySummary>>(
-        `/companies${toQuery({
-          search: debouncedSearch,
-          priority,
-          page,
-          pageSize: 20,
-          ...sortParams(sort),
-        })}`,
-      ),
+    queryKey: request.queryKey,
+    queryFn: () => api.get<PaginatedResult<CompanySummary>>(request.path),
     placeholderData: keepPreviousData,
   });
 
@@ -422,6 +454,9 @@ export function CompaniesWorkspace() {
     }
   }
 
+  if (query.error instanceof ApiError && query.error.status === 403) {
+    return <PageFrame width="wide"><div role="alert"><Surface className="space-y-2 p-5"><h2 className="font-medium">{t("errors.accessRestricted")}</h2><p className="text-sm text-muted-foreground">{t("errors.noPermissionView")}</p></Surface></div></PageFrame>;
+  }
   return (
     <PageFrame width="wide">
       <PageHeader
@@ -500,12 +535,27 @@ export function CompaniesWorkspace() {
           />
         </ToolbarFilter>
       </DataToolbar>
+      <Surface className="grid gap-px overflow-visible sm:grid-cols-2 xl:grid-cols-4">
+        <ToolbarFilter className="min-w-0" label={t("companies.countryCode")}>
+          <EnumSelect allowEmpty value={countryCode} onChange={(value) => { setCountryCode(value); setPage(1); }} emptyLabel={t("markets.anyCountry")}
+            options={COUNTRY_CODES.map((value) => ({ value, label: countryNames.of(value) ?? value })).sort((a, b) => a.label.localeCompare(b.label, locale))} />
+        </ToolbarFilter>
+        <ToolbarFilter className="min-w-0" label={t("companies.salesMarket")}>
+          <EnumSelect allowEmpty value={salesMarketCode} onChange={(value) => { setSalesMarketCode(value); setPage(1); }} emptyLabel={t("markets.anyMarket")} disabled={markets.isPending || markets.isError}
+            options={(markets.data?.markets ?? []).map((market) => ({ value: market.code, label: locale === "ar" ? market.nameAr : market.name }))} />
+        </ToolbarFilter>
+        <ToolbarFilter className="min-w-0" label={t("companies.owner")}><UserSelect allowEmpty emptyLabel={t("markets.anyOwner")} value={ownerId} onChange={(value) => { setOwnerId(value); setPage(1); }} /></ToolbarFilter>
+        <div className="flex items-center justify-end px-3 py-2"><Button type="button" variant="outline" size="sm" disabled={!filtered} onClick={clearFilters}>{t("markets.clearFilters")}</Button></div>
+      </Surface>
+      {markets.isPending && <p role="status" className="text-sm text-muted-foreground">{t("markets.loading")}</p>}
+      {markets.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><span>{t(marketErrorKey(markets.error))}</span><Button type="button" size="sm" variant="outline" onClick={() => void markets.refetch()}>{t("common.retry")}</Button></div>}
+      {!markets.isPending && !markets.isError && markets.data?.markets.length === 0 && <p role="status" className="text-sm text-muted-foreground">{t("markets.noVisibleMarkets")}</p>}
       <QueryPanel
         query={query}
         skeleton={
           <>
             <div className="hidden md:block">
-              <TableSkeleton cols={9} />
+              <TableSkeleton cols={10} />
             </div>
             <div className="md:hidden">
               <CardListSkeleton />
@@ -517,10 +567,10 @@ export function CompaniesWorkspace() {
         empty={
           <EmptyState
             icon={Building2}
-            title={t("companies.empty")}
-            description={t("companies.emptyHint")}
+            title={t(filtered ? "markets.noMatches" : "companies.empty")}
+            description={t(filtered ? "markets.noMatchesHint" : "companies.emptyHint")}
             actions={
-              <Can permission={PERMISSION_KEYS.COMPANIES_CREATE}>
+              filtered ? <Button variant="outline" onClick={clearFilters}>{t("markets.clearFilters")}</Button> : <Can permission={PERMISSION_KEYS.COMPANIES_CREATE}>
                 <Button onClick={() => setOpen(true)}>{t("companies.add")}</Button>
               </Can>
             }
@@ -529,10 +579,12 @@ export function CompaniesWorkspace() {
       >
         {(data) => (
           <>
+            <div className="mb-3 flex justify-end"><CompactPagination page={page} pageSize={20} total={data.total} onPageChange={setPage} /></div>
             <Surface className="hidden min-w-0 overflow-hidden md:block">
-              <Table className="w-full min-w-[87.5rem] table-fixed">
+              <Table className="w-full min-w-[101.5rem] table-fixed">
                 <colgroup>
                   <col className="w-[13.5rem]" />
+                  <col className="w-[14rem]" />
                   <col className="w-[10rem]" />
                   <col className="w-[7rem]" />
                   <col className="w-[10rem]" />
@@ -545,6 +597,7 @@ export function CompaniesWorkspace() {
                 <TableHeader>
                   <TableRow className="[&_th]:whitespace-nowrap">
                     <TableHead>{t("companies.company")}</TableHead>
+                    <TableHead>{t("markets.countryAndMarket")}</TableHead>
                     <TableHead>{t("companies.sector")}</TableHead>
                     <TableHead>{t("companies.size")}</TableHead>
                     <TableHead>{t("companies.qualification")}</TableHead>
@@ -584,6 +637,7 @@ export function CompaniesWorkspace() {
                           </div>
                         </div>
                       </TableCell>
+                      <TableCell><CompanyTerritory countryCode={company.countryCode} salesMarketCode={company.salesMarketCode} markets={markets.data?.markets ?? []} /></TableCell>
                       <TableCell>
                         <span
                           className="line-clamp-2 break-words"
@@ -676,6 +730,7 @@ export function CompaniesWorkspace() {
                         <p className="font-medium" dir="auto">
                           {company.name}
                         </p>
+                        <CompanyTerritory countryCode={company.countryCode} salesMarketCode={company.salesMarketCode} markets={markets.data?.markets ?? []} />
                         <p className="text-sm text-muted-foreground" dir="auto">
                           {company.sector || t("common.noSector")}
                         </p>
@@ -717,12 +772,7 @@ export function CompaniesWorkspace() {
                 </div>
               ))}
             </div>
-            <PaginationBar
-              page={page}
-              pageSize={20}
-              total={data.total}
-              onPageChange={setPage}
-            />
+
           </>
         )}
       </QueryPanel>

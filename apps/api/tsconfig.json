@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": [
+      "ES2023"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -12,7 +14,15 @@
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src", "prisma/seed.ts", "prisma.config.ts", "tsup.config.ts"]
+  "include": [
+    "src",
+    "prisma/seed.ts",
+    "prisma.config.ts",
+    "tsup.config.ts",
+    "scripts"
+  ]
 }

@@ -132,6 +132,11 @@ function mapRow(
   return mapped;
 }
 
+function validateHeaders(headers: string[], columns: readonly string[]) {
+  const recognized=headers.map(header=>matchImportColumn(header,columns)).filter((v):v is string=>v!==null);
+  if(new Set(recognized).size!==recognized.length)throw new Error("IMPORT_HEADERS: Duplicate recognized column headers are not supported.");
+
+}
 export async function rowsFromSpreadsheet(
   filename: string,
   buffer: Buffer,
@@ -142,7 +147,7 @@ export async function rowsFromSpreadsheet(
 
   if (lower.endsWith(".csv")) {
     const records = parseCsv(buffer, {
-      columns: true,
+      columns: (headers: string[]) => { validateHeaders(headers,columns); return headers; },
       skip_empty_lines: true,
       trim: true,
       relax_column_count: true,
@@ -163,6 +168,7 @@ export async function rowsFromSpreadsheet(
     if (!headerRow) {
       return [];
     }
+    validateHeaders(headerRow,columns);
     return dataRows
       .map((values) => {
         const raw: Record<string, string | null> = {};

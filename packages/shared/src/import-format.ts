@@ -199,7 +199,7 @@ export function importGuide(entity: "COMPANIES" | "CONTACTS"): string {
   if (entity === "CONTACTS") {
     return `Required: Company Name, Name. Decision Role: ${Object.values(DECISION_ROLE_LABELS).join(", ")}. Preferred Channel: ${Object.values(PREFERRED_CHANNEL_LABELS).join(", ")}.`;
   }
-  return `Required: Company Name. Size: ${Object.values(COMPANY_SIZE_LABELS).join(", ")}. Source: ${Object.values(COMPANY_SOURCE_LABELS).join(", ")}. Scores 1–5 optional. Fit + Problem Potential set Priority now; Access pending until Decision-Maker Access is known. Full Qualification uses all three. Blank Owner Email assigns the importing user.`;
+  return `Required: Company Name, Country Code (ISO alpha-2, e.g. JO/GB/US), Sales Market (configured code, initially JO/UK/US/OTHER). Country is actual location; market is the chosen sales territory. Size: ${Object.values(COMPANY_SIZE_LABELS).join(", ")}. Source: ${Object.values(COMPANY_SOURCE_LABELS).join(", ")}. Scores 1–5 optional. Fit + Problem Potential set Priority now; Access pending until Decision-Maker Access is known. Full Qualification uses all three. Blank Owner Email assigns the importing user.`;
 }
 
 export const COMPANY_SIZE_IMPORT_VALUES = COMPANY_SIZES.map(

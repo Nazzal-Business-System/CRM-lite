@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { AppLink } from "@/components/layout/app-link";
+import { Monitor, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,8 +56,12 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
           <div className="truncate text-xs font-normal" dir="ltr">
             {user.email}
           </div>
+          {user.defaultMarketCode && <p className="mt-2 text-xs font-normal text-muted-foreground" title={t("partners.currencyHint")}>{t("partners.defaultMarket")}: {user.defaultMarketCode === "OTHER" ? t("partners.international") : user.defaultMarketCode} · <bdi>{user.initialDisplayCurrency}</bdi></p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <AppLink href="/account/sessions"><Monitor className="size-4" />{t("sessions.myTitle")}</AppLink>
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
             void logout();

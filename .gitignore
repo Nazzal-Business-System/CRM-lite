@@ -10,6 +10,7 @@ node_modules/
 dist/
 build/
 .next/
+.next-isolated/
 out/
 apps/api/src/generated/
 
@@ -45,3 +46,9 @@ temp/
 # database backup artifacts
 *.dump
 *.backup
+
+# encrypted database backups and accidental offline age identity exports
+*.dump.age
+*.dump.age.partial
+*.backup.age
+*.agekey

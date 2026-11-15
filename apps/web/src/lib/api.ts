@@ -4,18 +4,21 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly fields?: Record<string, string[]>;
+  readonly failure?: "network";
 
   constructor(
     status: number,
     code: string,
     message: string,
     fields?: Record<string, string[]>,
+    failure?: "network",
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.failure = failure;
   }
 }
 
@@ -32,8 +35,8 @@ type ApiEnvelope<T> =
   | { data: T; error?: undefined }
   | { data?: undefined; error: ApiErrorBody | string };
 
-function serviceUnavailableError(status = 503): ApiError {
-  return new ApiError(status, "SERVICE_UNAVAILABLE", SERVICE_UNAVAILABLE_MESSAGE);
+function serviceUnavailableError(status = 503, failure?: "network"): ApiError {
+  return new ApiError(status, "SERVICE_UNAVAILABLE", SERVICE_UNAVAILABLE_MESSAGE, undefined, failure);
 }
 
 function requestFailedError(status: number, code = "INTERNAL_ERROR"): ApiError {
@@ -50,7 +53,12 @@ async function parseResponse<T>(response: Response): Promise<T> {
     throw requestFailedError(response.status || 500);
   }
 
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+  let payload: ApiEnvelope<T> | null;
+  try {
+    payload = await response.json() as ApiEnvelope<T>;
+  } catch {
+    throw serviceUnavailableError(response.status >= 500 ? response.status : 503);
+  }
 
   if (!response.ok || !payload || !("data" in payload) || payload.data === undefined) {
     const error = payload && "error" in payload ? payload.error : undefined;
@@ -78,47 +86,57 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload.data;
 }
 
-export async function apiRequest<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+export function isConfirmedUnauthenticated(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401 && error.code === "UNAUTHENTICATED";
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-
-  let response: Response;
   try {
-    response = await fetch(`/api${path}`, {
+    return await fetch(`/api${path}`, {
       ...init,
       headers,
       credentials: "include",
+      // Bound session verification without imposing a new deadline on imports/mutations.
+      signal: path === "/auth/me"
+        ? init.signal
+          ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)])
+          : AbortSignal.timeout(15_000)
+        : init.signal,
     });
   } catch {
-    throw serviceUnavailableError();
+    if (typeof window !== "undefined" && !path.startsWith("/auth/")) {
+      window.dispatchEvent(new Event("nbs:auth-revalidate"));
+    }
+    throw serviceUnavailableError(503, "network");
   }
+}
 
-  if (
-    response.status === 401 &&
-    typeof window !== "undefined" &&
-    !path.startsWith("/auth/")
-  ) {
-    window.dispatchEvent(new Event("nbs:unauthorized"));
+async function readResponse<T>(path: string, response: Response): Promise<T> {
+  try {
+    return await parseResponse<T>(response);
+  } catch (error) {
+    if (typeof window !== "undefined" && !path.startsWith("/auth/")) {
+      // Revalidate identity with /auth/me; a resource response cannot erase it.
+      if (error instanceof ApiError && (error.status === 401 || error.status >= 500)) {
+        window.dispatchEvent(new Event("nbs:auth-revalidate"));
+      }
+    }
+    throw error;
   }
+}
 
-  return parseResponse<T>(response);
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return readResponse<T>(path, await request(path, init));
 }
 
 export async function apiDownload(path: string, filename: string): Promise<void> {
-  let response: Response;
-  try {
-    response = await fetch(`/api${path}`, { credentials: "include" });
-  } catch {
-    throw serviceUnavailableError();
-  }
-
+  const response = await request(path);
   if (!response.ok) {
-    await parseResponse(response);
+    await readResponse(path, response);
   }
 
   const blob = await response.blob();

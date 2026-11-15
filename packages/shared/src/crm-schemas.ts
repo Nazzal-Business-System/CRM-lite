@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countryCodeSchema, salesMarketCodeSchema } from "./markets";
 import {
   ACTIVITY_TYPES,
   COMPANY_SIZES,
@@ -108,6 +109,8 @@ export const paginationQuerySchema = z.object({
 });
 
 export const companyListQuerySchema = paginationQuerySchema.extend({
+  countryCode: countryCodeSchema.optional(),
+  salesMarketCode: salesMarketCodeSchema.optional(),
   sector: z.string().trim().optional(),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]).optional(),
   ownerId: z.string().optional(),
@@ -120,6 +123,8 @@ export const companyListQuerySchema = paginationQuerySchema.extend({
 export type CompanyListQuery = z.infer<typeof companyListQuerySchema>;
 
 export const companyWriteSchema = z.object({
+  countryCode: countryCodeSchema,
+  salesMarketCode: salesMarketCodeSchema,
   name: requiredText(180, "Company name is required."),
   website: optionalText(300),
   sector: optionalText(120),
@@ -340,6 +345,8 @@ export type ImportCommitInput = z.infer<typeof importCommitSchema>;
 
 export const COMPANY_IMPORT_COLUMNS = [
   "Company Name",
+  "Country Code",
+  "Sales Market",
   "Website",
   "Sector",
   "Company Size",
@@ -370,3 +377,5 @@ export const CONTACT_IMPORT_COLUMNS = [
   "Notes",
   "Primary",
 ] as const;
+
+export const importTemplateQuerySchema = importParseQuerySchema.extend({ format: z.enum(["xlsx","csv"]).default("xlsx") });

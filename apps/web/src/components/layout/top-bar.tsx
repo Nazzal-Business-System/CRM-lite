@@ -20,7 +20,11 @@ export function TopBar() {
   const { t, locale } = useI18n();
 
   const titleKey =
-    pathname === "/"
+    pathname.startsWith("/demos") ? "demos.title" :
+    pathname.startsWith("/pricing") ? "pricing.title" :
+    pathname.startsWith("/account/sessions") ? "sessions.myTitle"
+      : pathname.startsWith("/admin/sessions") ? "sessions.adminTitle"
+      : pathname === "/"
       ? "nav.dashboard"
       : pathname.startsWith("/admin/recruitment")
         ? "nav.recruitment"
@@ -33,7 +37,7 @@ export function TopBar() {
             : pathname.startsWith("/notifications")
               ? "nav.notifications"
         : pathname.startsWith("/admin/users")
-          ? "nav.users"
+          ? "partners.title"
           : pathname.startsWith("/admin/roles")
             ? "nav.roles"
             : pathname.startsWith("/companies")

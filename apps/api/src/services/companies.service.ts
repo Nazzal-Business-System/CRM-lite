@@ -13,7 +13,9 @@ import {
 } from "@nbs/shared";
 import { Prisma } from "../generated/prisma/client";
 import { skipTake } from "../lib/crm";
-import { conflict, notFound } from "../lib/errors";
+import { validateCompanyTerritory } from "./markets.service";
+import { countryCodeSchema, salesMarketCodeSchema } from "@nbs/shared";
+import { badRequest, conflict, notFound } from "../lib/errors";
 import { prisma } from "../lib/prisma";
 import { conciseChanges, writeAuditLog } from "./audit.service";
 import { createNotification } from "./notifications.service";
@@ -81,6 +83,8 @@ function qualificationFrom(input: {
 }
 
 const companyListSelect = {
+  countryCode: true,
+  salesMarketCode: true,
   id: true,
   name: true,
   website: true,
@@ -147,6 +151,8 @@ function buildCompanySearchWhere(query: CompanyListQuery): Prisma.CompanyWhereIn
   const search = query.search.trim();
   return {
     ...(query.ownerId ? { ownerId: query.ownerId } : {}),
+    ...(query.countryCode ? { countryCode: query.countryCode } : {}),
+    ...(query.salesMarketCode ? { salesMarketCode: query.salesMarketCode } : {}),
     ...(query.sector
       ? { sector: { contains: query.sector, mode: "insensitive" } }
       : {}),
@@ -200,6 +206,8 @@ async function attachListMetrics(
   companies: Array<{
     id: string;
     name: string;
+    countryCode: string | null;
+    salesMarketCode: string | null;
     website: string | null;
     sector: string | null;
     companySize: CompanySummary["companySize"];
@@ -263,6 +271,8 @@ async function attachListMetrics(
       company.decisionMakerAccess,
     );
     return {
+      countryCode: company.countryCode,
+      salesMarketCode: company.salesMarketCode,
       id: company.id,
       name: company.name,
       website: company.website,
@@ -365,6 +375,7 @@ export async function getCompany(id: string): Promise<CompanyDetail> {
 }
 
 export async function createCompany(input: CreateCompanyInput, actor: AuthUser) {
+  const territory = await validateCompanyTerritory(input.countryCode, input.salesMarketCode);
   const nameNormalized = normalizeCompanyName(input.name);
   const websiteDomain = normalizeWebsiteDomain(input.website);
   const governedOwnerId = ownerForCreate(actor, input.ownerId);
@@ -375,6 +386,7 @@ export async function createCompany(input: CreateCompanyInput, actor: AuthUser) 
 
   const company = await prisma.company.create({
     data: {
+      ...territory,
       name: input.name.trim(),
       nameNormalized,
       website: input.website ?? null,
@@ -407,6 +419,14 @@ export async function updateCompany(id: string, input: UpdateCompanyInput, actor
     throw notFound("Company not found.");
   }
 
+  if (input.countryCode !== undefined && !countryCodeSchema.safeParse(input.countryCode).success) {
+    throw badRequest("Country Code: a valid ISO alpha-2 code is required.");
+  }
+  if (input.salesMarketCode !== undefined) {
+    if (!salesMarketCodeSchema.safeParse(input.salesMarketCode).success || !await prisma.salesMarket.findUnique({ where: { code: input.salesMarketCode } })) {
+      throw badRequest("Sales Market: unsupported market code.");
+    }
+  }
   const name = input.name?.trim() ?? existing.name;
   const nameNormalized = normalizeCompanyName(name);
   const website =
@@ -443,6 +463,8 @@ export async function updateCompany(id: string, input: UpdateCompanyInput, actor
     data: {
       name,
       nameNormalized,
+      ...(input.countryCode !== undefined ? { countryCode: input.countryCode } : {}),
+      ...(input.salesMarketCode !== undefined ? { salesMarketCode: input.salesMarketCode } : {}),
       ...(input.website !== undefined ? { website, websiteDomain } : {}),
       ...(input.sector !== undefined ? { sector: input.sector } : {}),
       ...(input.companySize !== undefined ? { companySize: input.companySize } : {}),
@@ -466,7 +488,7 @@ export async function updateCompany(id: string, input: UpdateCompanyInput, actor
   const changes = conciseChanges(
     { ...existing, owner: existing.owner?.name ?? null },
     { ...result, owner: result.owner?.name ?? null },
-    ["name", "website", "sector", "companySize", "locations", "source", "companyFit", "problemPotential", "decisionMakerAccess", "priority", "owner", "generalNotes"],
+    ["countryCode", "salesMarketCode", "name", "website", "sector", "companySize", "locations", "source", "companyFit", "problemPotential", "decisionMakerAccess", "priority", "owner", "generalNotes"],
   );
   await writeAuditLog({ actorUserId: actor.id, action: existing.ownerId !== (result.owner?.id ?? null) ? "COMPANY_OWNER_CHANGED" : "COMPANY_UPDATED", entityType: "COMPANY", entityId: id, entityLabel: result.name, changes });
   if (result.owner && result.owner.id !== existing.ownerId && result.owner.id !== actor.id) {

@@ -19,6 +19,8 @@ export interface UserRef {
 }
 
 export interface CompanySummary {
+  countryCode: string | null;
+  salesMarketCode: string | null;
   id: string;
   name: string;
   website: string | null;

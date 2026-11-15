@@ -77,7 +77,7 @@ export async function listPermissionCatalog() {
 
 export async function listRoleOptions() {
   return prisma.role.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, isSystem: true },
     orderBy: { name: "asc" },
   });
 }

@@ -1,4 +1,5 @@
 "use client";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import type { LucideIcon } from "lucide-react";
 import { LoaderCircle, RefreshCw, Search } from "lucide-react";
@@ -481,4 +482,15 @@ export function FormSection({
       <div className="grid gap-4 sm:grid-cols-2">{children}</div>
     </div>
   );
+}
+
+export function CompactPagination({page,pageSize,total,onPageChange}:{page:number;pageSize:number;total:number;onPageChange:(page:number)=>void}) {
+  const {t}=useI18n();const pages=Math.max(1,Math.ceil(total/pageSize));
+  return <nav aria-label={t("common.pagination")} className="flex flex-wrap items-center justify-end gap-3 text-sm text-muted-foreground">
+    <span aria-live="polite" className="tabular-nums">{t("common.totalPageOf",{total,page,pages})}</span>
+    <div className="flex gap-1">
+      <Button type="button" variant="outline" size="icon" aria-label={t("common.previous")} title={t("common.previous")} disabled={page<=1} onClick={()=>onPageChange(page-1)}><ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true"/></Button>
+      <Button type="button" variant="outline" size="icon" aria-label={t("common.next")} title={t("common.next")} disabled={page>=pages} onClick={()=>onPageChange(page+1)}><ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true"/></Button>
+    </div>
+  </nav>;
 }
