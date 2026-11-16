@@ -16,6 +16,7 @@ test("shared partner modal form renders create/edit, localized fields and safe c
     import {I18nProvider} from './apps/web/src/i18n/provider.tsx';
     import {AuthProvider} from './apps/web/src/providers/auth-provider.tsx';
     import {PartnerFormView} from './apps/web/src/components/users/partner-editor.tsx';
+    import {PartnerPriceBookFields} from './apps/web/src/components/users/partner-price-book-fields.tsx';
     import {partnerActorKey} from './apps/web/src/lib/partners.ts';
     import {INITIAL_SALES_MARKETS,PERMISSION_KEYS as P} from '@nbs/shared';
     import NewPage from './apps/web/src/app/(app)/admin/users/new/page.tsx';
@@ -32,6 +33,19 @@ test("shared partner modal form renders create/edit, localized fields and safe c
       client.setQueryData(['managed-sales-markets','admin'],{markets:[...INITIAL_SALES_MARKETS]});
       const render=props=>renderToStaticMarkup(h(AppRouterContext.Provider,{value:router},h(QueryClientProvider,{client},h(I18nProvider,null,h(AuthProvider,null,h(PartnerFormView,{internal:false,onGuardChange(){},onCancel(){},onSaved(){},...props}))))));
       const create=render({});const edit=render({target});
+      const bookFields=value=>renderToStaticMarkup(h(I18nProvider,null,h(PartnerPriceBookFields,{value,disabled:false,pricingEnabled:true,onChange(){}})));
+      const emptyBooks=bookFields({scope:'selected',bookIds:[],defaultBookId:null});
+      const assignedBooks=bookFields({scope:'selected',bookIds:['JO'],defaultBookId:'JO'});
+      const invalidDefault=bookFields({scope:'selected',bookIds:['JO'],defaultBookId:null});
+      assert.ok(emptyBooks.includes('role="status"'));
+      assert.ok(invalidDefault.includes('role="alert"'));
+      for(const markup of [emptyBooks,assignedBooks]) {
+        assert.ok(!markup.includes('partners.'));
+        assert.ok(markup.includes('sm:grid-cols-3'));
+        assert.ok(markup.includes('dir="'+(locale==='ar'?'rtl':'ltr')+'"'));
+        for(const currency of ['JOD','USD','GBP']) assert.ok(markup.includes(currency));
+        assert.ok(markup.includes('partner-price-book-default'));
+      }
       for(const markup of [create,edit]){
         assert.equal((markup.match(/<form/g)||[]).length,1);
         assert.ok(markup.includes('overflow-y-auto'));assert.ok(markup.includes('min-h-0'));assert.ok(markup.includes('sm:grid-cols-2'));

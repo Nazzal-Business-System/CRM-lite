@@ -51,3 +51,50 @@ test("market management requires both global Admin and explicit permission; glob
   await assert.rejects(marketContext.run({ actor: () => admin }, () => updateUser(result.id, { roleId: "sales-role" }, admin.id, admin)), { status: 400 });
   assert.equal(f.tables.user!.find(row => row.id === result.id)!.roleId, "admin-role");
 });
+
+test("onboarding explicitly assigns pricing independently from markets; omitted access never grants books", async t => {
+  const f = prepare(t); const manager = { ...admin, permissions: [...admin.permissions, P.PRICING_PRICEBOOKS_MANAGE] };
+  const existing = structuredClone({ companies: f.tables.company, memberships: f.tables.userSalesMarket });
+  const created = await marketContext.run({ actor: () => manager }, () => createUser({ ...input(), priceBookAccess: { scope: "selected", bookIds: ["JO"], defaultBookId: "JO" } }, manager.id, manager));
+  assert.deepEqual(f.tables.priceBookGrant!.filter(row => row.userId === created.id).map(row => row.bookId), ["JO"]);
+  assert.equal(f.tables.userPricingPreference!.find(row => row.userId === created.id)!.defaultBookId, "JO");
+  assert.deepEqual(created.marketCodes?.sort(), ["JO", "UK"]);
+  assert.ok(f.tables.auditLog!.some(row => row.action === "USER_PRICE_BOOKS_CHANGED"));
+  assert.deepEqual(f.tables.company, existing.companies);
+  const unassigned = await marketContext.run({ actor: () => admin }, () => createUser({ ...input(), email: "no-prices@example.invalid" }, admin.id, admin));
+  assert.equal(f.tables.priceBookGrant!.some(row => row.userId === unassigned.id), false);
+  assert.equal(f.calls.some(call => call.model === "session"), false);
+});
+
+test("price-book management in user CRUD requires system Admin and explicit permission", async t => {
+  const f = prepare(t); const before = structuredClone(f.tables);
+  const priceBookAccess = { scope: "selected" as const, bookIds: ["JO" as const], defaultBookId: "JO" as const };
+  for (const actor of [admin, { ...admin, role: { ...admin.role, name: "Sales" }, permissions: [...admin.permissions, P.PRICING_PRICEBOOKS_MANAGE] }]) {
+    await assert.rejects(createUser({ ...input(), priceBookAccess }, actor.id, actor), { status: 403 });
+    await assert.rejects(updateUser("partner", { priceBookAccess }, actor.id, actor), { status: 403 });
+  }
+  assert.deepEqual(f.tables, before);
+});
+
+test("invalid pricing defaults roll back account/market edits and omitted pricing preserves existing grants", async t => {
+  const f = prepare(t); const manager = { ...admin, permissions: [...admin.permissions, P.PRICING_PRICEBOOKS_MANAGE] };
+  const before = structuredClone(f.tables);
+  const invalid = { scope: "selected" as const, bookIds: ["JO" as const], defaultBookId: "US" as const };
+  await assert.rejects(marketContext.run({ actor: () => manager }, () => createUser({ ...input(), priceBookAccess: invalid }, manager.id, manager)));
+  assert.deepEqual(f.tables, before);
+  await assert.rejects(marketContext.run({ actor: () => manager }, () => updateUser("partner", { name: "Changed", marketCodes: ["US"], defaultMarketCode: "US", priceBookAccess: invalid }, manager.id, manager)));
+  assert.deepEqual(f.tables, before);
+  f.setAuditOutage(true);
+  const validAccess = { scope: "selected" as const, bookIds: ["JO" as const], defaultBookId: "JO" as const };
+  await assert.rejects(marketContext.run({ actor: () => manager }, () => createUser({ ...input(), accountType: "INTERNAL", marketCodes: undefined, defaultMarketCode: undefined, priceBookAccess: validAccess }, manager.id, manager)));
+  await assert.rejects(marketContext.run({ actor: () => manager }, () => updateUser("partner", { name: "Not committed", priceBookAccess: validAccess }, manager.id, manager)));
+  assert.deepEqual(f.tables, before, "pricing audit failure rolls back users, grants, defaults and audit rows together");
+  f.setAuditOutage(false);
+  await marketContext.run({ actor: () => manager }, () => updateUser("partner", { priceBookAccess: { scope: "selected", bookIds: ["JO", "UK"], defaultBookId: "UK" } }, manager.id, manager));
+  const pricing = structuredClone({ grants: f.tables.priceBookGrant, defaults: f.tables.userPricingPreference });
+  const protectedState = structuredClone({ companies: f.tables.company, memberships: f.tables.userSalesMarket });
+  await marketContext.run({ actor: () => admin }, () => updateUser("partner", { name: "Renamed" }, admin.id, admin));
+  assert.deepEqual({ grants: f.tables.priceBookGrant, defaults: f.tables.userPricingPreference }, pricing);
+  assert.deepEqual({ companies: f.tables.company, memberships: f.tables.userSalesMarket }, protectedState);
+  assert.equal(f.tables.user!.find(row => row.id === "partner")!.sessionVersion, 0);
+});

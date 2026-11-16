@@ -37,22 +37,9 @@ import {
 import { useI18n } from "@/i18n/provider";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { permissionCategoryLabel, permissionActionLabel } from "@/lib/permission-labels";
 
 const EMPTY_CATALOG: PermissionDefinition[] = [];
-
-function permissionCategoryLabel(
-  category: string,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-  return t(`roles.permissions.${category.toLowerCase()}`);
-}
-
-function permissionActionLabel(
-  actionLabel: string,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-  return t(`roles.permissions.${actionLabel.toLowerCase()}`);
-}
 
 function RoleEditor({
   role,

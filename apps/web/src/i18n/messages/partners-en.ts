@@ -1,4 +1,11 @@
 export const partnersEn = {
+  priceBooks: "Pricing access",
+  priceBookHint: "Select price books explicitly. Pricing access is separate from company sales markets and account roles; selecting a market grants no prices.",
+  bookJO: "Jordan", bookUS: "United States", bookUK: "United Kingdom", bookDraft: "Internal Draft v1",
+  defaultPriceBook: "Default price book",
+  priceBookDefaultRequired: "Choose a default from the selected price books.",
+  priceBookWarning: "This role has pricing permissions, but no price book is assigned. Pricing will remain unavailable until a book and default are explicitly assigned.",
+  priceBookDenied: "Price-book access can only be managed by a system Admin with price-book management permission. Pricing users need an explicit book assignment and default.",
   "close": "Close partner form",
   "editDescription": "Update account details, access and sales markets. Saved changes apply together.",
   "discardTitle": "Discard unsaved changes?",

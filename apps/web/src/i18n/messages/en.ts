@@ -1,4 +1,5 @@
 import { partnersEn } from "./partners-en";
+import { permissionLabelsEn } from "./permission-labels";
 import { demosEn } from "./demos-en";
 import { pricingEn } from "./pricing-en";
 export const enMessages = {
@@ -168,7 +169,10 @@ export const enMessages = {
     openNavigation: "Open navigation",
   },
   auth: {
-    connectionError: "Unable to verify your session. Check your connection and retry.",
+    connecting: "Connecting to CRM…",
+    connectingDescription: "The CRM service may take a moment to wake up. We’re reconnecting automatically; you can keep this page open.",
+    connectionTitle: "Unable to connect to CRM",
+    connectionError: "The CRM service is unavailable. Check your internet connection and retry; connection failures do not sign you out.",
     loginTitle: "Sign in",
     loginSubtitle: "Use the account issued by NBS administration.",
     password: "Password",
@@ -625,6 +629,8 @@ export const enMessages = {
     createFailed: "Unable to create role.",
     updateFailed: "Unable to update role.",
     deleteFailed: "Unable to delete role.",
+    permissionCategories: permissionLabelsEn.categories,
+    permissionActions: permissionLabelsEn.actions,
     permissions: {
       demos: "Live Demos",
       dashboard: "Dashboard",

@@ -151,7 +151,7 @@ export async function apiDownload(path: string, filename: string): Promise<void>
 }
 
 export const api = {
-  get: <T>(path: string) => apiRequest<T>(path),
+  get: <T>(path: string, init?: Pick<RequestInit, "signal">) => apiRequest<T>(path, init),
   post: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, {
       method: "POST",

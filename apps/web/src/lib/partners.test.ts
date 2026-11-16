@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { canManagePartnerPriceBooks, partnerPriceBookOptions } from "./partner-price-books";
 import { marketDisplayCurrency, PERMISSION_KEYS as P, createUserSchema, type AuthUser } from "@nbs/shared";
 import { partnerPayload, partnerSetupError, partnerFormDirty, partnerDismissal, partnerSaveOptions, type PartnerForm } from "./partners";
 import { QueryClient } from "@tanstack/react-query";
@@ -9,6 +10,36 @@ import { enMessages } from "../i18n/messages/en";
 import { arMessages } from "../i18n/messages/ar";
 const admin = { id: "admin", permissions: [P.MARKETS_MANAGE_MEMBERSHIPS], role: { name: "Admin", isSystem: true } } as AuthUser;
 const form: PartnerForm = { name: "Fixture", email: "fixture@example.invalid", password: "fixture-password", roleId: "role", accountType: "PARTNER", marketCodes: ["JO", "UK"], defaultMarketCode: "UK" };
+
+test("partner pricing is explicitly selected, independently authorized, validated and tracked as dirty", () => {
+  const manager = { ...admin, permissions: [...admin.permissions, P.PRICING_PRICEBOOKS_MANAGE] };
+  const priceBookAccess = { scope: "selected" as const, bookIds: ["JO" as const], defaultBookId: "JO" as const };
+  assert.equal(canManagePartnerPriceBooks(manager), true);
+  assert.equal(canManagePartnerPriceBooks(admin), false);
+  assert.equal(canManagePartnerPriceBooks({ ...manager, role: { ...manager.role, isSystem: false } }), false);
+  assert.equal(partnerPriceBookOptions(admin, "partner").enabled, false);
+  assert.equal(partnerPriceBookOptions(manager, "partner").enabled, true);
+  assert.equal("priceBookAccess" in partnerPayload(form, manager, false, false), false);
+  const withBooks = { ...form, priceBookAccess };
+  assert.deepEqual(partnerPayload(withBooks, manager, false, false).priceBookAccess, priceBookAccess);
+  assert.equal(partnerFormDirty(withBooks, form), true);
+  assert.throws(() => partnerPayload(withBooks, admin, false, false), { status: 403 });
+  assert.throws(() => partnerPayload({ ...withBooks, priceBookAccess: { ...priceBookAccess, defaultBookId: "US" } }, manager, false, false));
+  assert.throws(() => partnerPayload({ ...withBooks, priceBookAccess: { ...priceBookAccess, bookIds: ["JO", "JO"] } }, manager, false, false));
+});
+
+test("unmodified pricing access is omitted from account edits, while explicit book edits are submitted atomically", async t => {
+  const manager = { ...admin, permissions: [...admin.permissions, P.PRICING_PRICEBOOKS_MANAGE] };
+  const initial: PartnerForm = { ...form, password: "", priceBookAccess: { scope: "selected", bookIds: ["JO"], defaultBookId: "JO" } };
+  const client = new QueryClient(); t.after(() => client.clear());
+  const payloads: Array<Record<string, unknown>> = [];
+  t.mock.method(api, "patch", async (_path: string, body: Record<string, unknown>) => { payloads.push(body); return {}; });
+  const save = partnerSaveOptions(client, { viewer: manager, targetId: "partner", initial, global: false, onSaved() {}, notify() {} });
+  await save.mutationFn({ ...initial, name: "Name changed" });
+  assert.equal("priceBookAccess" in payloads[0], false);
+  await save.mutationFn({ ...initial, priceBookAccess: { scope: "selected", bookIds: ["JO", "UK"], defaultBookId: "UK" } });
+  assert.deepEqual(payloads[1].priceBookAccess, { scope: "selected", bookIds: ["JO", "UK"], defaultBookId: "UK" });
+});
 test("default display currency is a market preference and partner defaults stay within assigned markets", () => {
   assert.deepEqual(["JO", "UK", "US", "OTHER"].map(marketDisplayCurrency), ["JOD", "GBP", "USD", "USD"]); assert.equal(marketDisplayCurrency(null), null);
   assert.equal(partnerSetupError(form, false), null); assert.equal(partnerSetupError({ ...form, defaultMarketCode: "US" }, false), "partners.defaultRequired");

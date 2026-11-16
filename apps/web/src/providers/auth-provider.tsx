@@ -12,10 +12,11 @@ import {
   type ReactNode,
 } from "react";
 import { api } from "@/lib/api";
-import { authQueryOptions, logoutMutationOptions, clearCachedSession } from "@/lib/auth-query";
+import { authQueryOptions, logoutMutationOptions, clearCachedSession, subscribeAuthRevalidation } from "@/lib/auth-query";
 import { useI18n } from "@/i18n/provider";
 import { navigateTo } from "@/lib/navigate";
 import { defaultAuthenticatedPath } from "@/lib/navigation";
+import { AuthConnectionState } from "@/components/auth-connection-state";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -81,13 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [login, logout, endSession, meQuery.data, meQuery.isLoading],
   );
 
-  useEffect(() => {
-    const revalidate = () => {
-      void queryClient.invalidateQueries({ queryKey: authQueryOptions.queryKey }, { cancelRefetch: false });
-    };
-    window.addEventListener("nbs:auth-revalidate", revalidate);
-    return () => window.removeEventListener("nbs:auth-revalidate", revalidate);
-  }, [queryClient]);
+  useEffect(() => subscribeAuthRevalidation(queryClient, {
+    window, document, isOnline: () => navigator.onLine,
+  }), [queryClient]);
 
   useEffect(() => {
     if (meQuery.isLoading) {
@@ -115,17 +112,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {meQuery.isError && (
+      {meQuery.isError && meQuery.data && (
         <div role="alert" className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-3 border-b bg-background p-4 text-sm shadow-md">
-          <span>{t("auth.connectionError")}</span>
+          <span>{t(meQuery.isFetching ? "auth.connecting" : "auth.connectionError")}</span>
           <button type="button" className="underline" disabled={meQuery.isFetching} onClick={() => {
-            void meQuery.refetch().then((result) => {
-              if (result.isSuccess) void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "auth" });
-            });
+            void meQuery.refetch({ cancelRefetch: false });
           }}>{t("common.retry")}</button>
         </div>
       )}
-      {meQuery.isError && !meQuery.data ? <div className="min-h-svh bg-background" /> : children}
+      {meQuery.data === undefined
+        ? <AuthConnectionState failed={meQuery.isError && !meQuery.isFetching} retry={() => { void meQuery.refetch({ cancelRefetch: false }); }} />
+        : children}
     </AuthContext.Provider>
   );
 }
