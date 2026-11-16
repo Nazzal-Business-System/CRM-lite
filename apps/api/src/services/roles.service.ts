@@ -76,10 +76,11 @@ export async function listPermissionCatalog() {
 }
 
 export async function listRoleOptions() {
-  return prisma.role.findMany({
-    select: { id: true, name: true, isSystem: true },
+  const roles = await prisma.role.findMany({
+    select: { id: true, name: true, isSystem: true, permissions: { select: { permission: { select: { key: true } } } } },
     orderBy: { name: "asc" },
   });
+  return roles.map(({ permissions, ...role }) => ({ ...role, permissionKeys: permissions.map(entry => entry.permission.key) }));
 }
 
 export async function createRole(input: CreateRoleInput, actorUserId: string): Promise<RoleSummary> {

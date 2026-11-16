@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { salesMarketCodeSchema, userMarketCodesSchema } from "./markets";
+import { replacePriceBookAccessSchema } from "./price-books";
 
 export const loginSchema = z.object({
   email: z.email("Enter a valid email address."),
@@ -21,6 +22,7 @@ export const createUserSchema = z.object({
   accountType: z.enum(["PARTNER", "INTERNAL"]).default("INTERNAL"),
   marketCodes: userMarketCodesSchema.optional(),
   defaultMarketCode: salesMarketCodeSchema.nullable().optional(),
+  priceBookAccess: replacePriceBookAccessSchema.optional(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
@@ -34,6 +36,7 @@ export const updateUserSchema = z
     accountType: z.enum(["PARTNER", "INTERNAL"]).optional(),
     marketCodes: userMarketCodesSchema.optional(),
     defaultMarketCode: salesMarketCodeSchema.nullable().optional(),
+    priceBookAccess: replacePriceBookAccessSchema.optional(),
   })
   .refine(
     (value) => Object.values(value).some((entry) => entry !== undefined),

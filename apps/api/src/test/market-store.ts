@@ -66,7 +66,7 @@ export function installMarketStore(t: TestContext) {
   }
   function project(row: Row, args: Args): Row {
     if (!args.select) return row;
-    return Object.fromEntries(Object.entries(args.select).filter(([,v]) => v).map(([key, selection]) => [key, typeof selection === "object" && row[key] != null ? project(object(row[key]), selection as Args) : row[key]]));
+    return Object.fromEntries(Object.entries(args.select).filter(([,v]) => v).map(([key, selection]) => [key, typeof selection === "object" && row[key] != null ? Array.isArray(row[key]) ? row[key].map(value => project(object(value), selection as Args)) : project(object(row[key]), selection as Args) : row[key]]));
   }
   const raw: Record<string, Record<string, (args?: Args) => Promise<unknown>>> = {};
   for (const model of Object.keys(tables)) {

@@ -16,6 +16,8 @@ import { conciseChanges, writeAuditLog } from "./audit.service";
 import { lockSessionUser, revokeUserSessions } from "./sessions.service";
 import { createNotification } from "./notifications.service";
 import { assertPartnerMarketAdmin, storePartnerMarkets, validatePartnerMarkets } from "./partner-markets.service";
+import { assertPriceBookManager, storeUserPriceBookAccess } from "./price-book-access.service";
+import { priceBookStorage } from "../lib/price-book-access";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -56,13 +58,14 @@ export async function listUsers() {
 }
 
 export async function createUser(input: CreateUserInput, actorUserId: string, actor?: AuthUser) {
+  if (input.priceBookAccess !== undefined) assertPriceBookManager(actor);
   await getRolePermissionKeys(input.roleId);
   const withMarkets = input.marketCodes !== undefined || input.defaultMarketCode !== undefined || input.accountType === "PARTNER";
   if (withMarkets) assertPartnerMarketAdmin(actor);
   const passwordHash = await hashPassword(input.password);
 
   try {
-    return await marketStorage(() => prisma.$transaction(async tx => {
+    return await marketStorage(() => priceBookStorage(() => prisma.$transaction(async tx => {
       const role = await tx.role.findUnique({ where: { id: input.roleId } });
       if (!role) throw badRequest("Selected role was not found.");
       const marketCodes = input.marketCodes ?? [];
@@ -81,9 +84,10 @@ export async function createUser(input: CreateUserInput, actorUserId: string, ac
     });
 
       if (withMarkets) await storePartnerMarkets(tx, user.id, marketCodes, defaultMarketCode, actor!);
+      if (input.priceBookAccess !== undefined) await storeUserPriceBookAccess(tx, user.id, input.priceBookAccess, actor!);
       await writeAuditLog({ actorUserId, action: "USER_CREATED", entityType: "USER", entityId: user.id, entityLabel: user.name, metadata: { role: user.role.name, isActive: user.isActive, accountType: input.accountType ?? "INTERNAL" } }, tx);
       return serializeAuthUser((await tx.user.findUnique({ where: { id: user.id }, include: userAccessInclude }))!);
-    }));
+    })));
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -101,6 +105,7 @@ export async function updateUser(
   actorUserId: string,
   actor?: AuthUser,
 ) {
+  if (input.priceBookAccess !== undefined) assertPriceBookManager(actor);
   const withMarkets = input.marketCodes !== undefined || input.defaultMarketCode !== undefined || input.accountType !== undefined;
   if (withMarkets) assertPartnerMarketAdmin(actor);
   const existing = await prisma.user.findUnique({
@@ -138,7 +143,7 @@ export async function updateUser(
   try {
     const nextPasswordHash = input.password ? await hashPassword(input.password) : undefined;
     const invalidateSessions = Boolean(nextPasswordHash) || input.isActive === false;
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await priceBookStorage(() => prisma.$transaction(async (tx) => {
       await lockSessionUser(tx, userId);
       await assertGlobalMarketAdminSurvives(tx, existing, input);
       const locked = await tx.user.findUnique({ where: { id: userId }, include: userAccessInclude });
@@ -167,8 +172,9 @@ export async function updateUser(
       });
       if (invalidateSessions) await revokeUserSessions(tx, userId, nextPasswordHash ? "PASSWORD_CHANGED" : "ACCOUNT_DEACTIVATED");
       if (withMarkets) await storePartnerMarkets(tx, userId, marketCodes, defaultMarketCode, actor!);
+      if (input.priceBookAccess !== undefined) await storeUserPriceBookAccess(tx, userId, input.priceBookAccess, actor!);
       return withMarkets ? (await tx.user.findUnique({ where: { id: userId }, include: userAccessInclude }))! : updated;
-    });
+    }));
 
     const result = serializeAuthUser(user);
     const changes = conciseChanges(

@@ -1,4 +1,5 @@
 import { partnersAr } from "./partners-ar";
+import { permissionLabelsAr } from "./permission-labels";
 import { demosAr } from "./demos-ar";
 import { pricingAr } from "./pricing-ar";
 export const arMessages = {
@@ -168,7 +169,10 @@ export const arMessages = {
     openNavigation: "فتح القائمة",
   },
   auth: {
-    connectionError: "تعذر التحقق من جلستك. تحقق من الاتصال وأعد المحاولة.",
+    connecting: "جارٍ الاتصال بنظام CRM…",
+    connectingDescription: "قد يستغرق تشغيل الخدمة بعض الوقت. نعيد الاتصال تلقائيًا؛ يمكنك إبقاء هذه الصفحة مفتوحة.",
+    connectionTitle: "تعذر الاتصال بنظام CRM",
+    connectionError: "خدمة CRM غير متاحة. تحقق من اتصال الإنترنت وأعد المحاولة؛ أعطال الاتصال لا تؤدي إلى تسجيل خروجك.",
     loginTitle: "تسجيل الدخول",
     loginSubtitle: "استخدم الحساب الصادر من إدارة NBS.",
     password: "كلمة المرور",
@@ -625,6 +629,8 @@ export const arMessages = {
     createFailed: "تعذّر إنشاء الدور.",
     updateFailed: "تعذّر تحديث الدور.",
     deleteFailed: "تعذّر حذف الدور.",
+    permissionCategories: permissionLabelsAr.categories,
+    permissionActions: permissionLabelsAr.actions,
     permissions: {
       demos: "العروض التجريبية المباشرة",
       dashboard: "لوحة التحكم",
